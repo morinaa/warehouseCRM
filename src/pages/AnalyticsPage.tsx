@@ -41,10 +41,10 @@ const AnalyticsPage = () => {
 
   const scopedOrders = useMemo(() => {
     if (isSuper) return orders;
-    if (isBuyer) return orders.filter((o) => o.accountId === user?.companyId);
+    if (isBuyer) return orders.filter((o) => o.buyerId === user?.buyerId);
     if (isSupplier) return orders.filter((o) => o.supplierId === user?.supplierId);
     return [];
-  }, [orders, isBuyer, isSupplier, isSuper, user?.companyId, user?.supplierId]);
+  }, [orders, isBuyer, isSupplier, isSuper, user?.buyerId, user?.supplierId]);
 
   const orderValueByMonth = useMemo(() => {
     const buckets: Record<string, number> = {};

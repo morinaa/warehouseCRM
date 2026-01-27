@@ -3,7 +3,7 @@ import type { CRMData } from '../types';
 export const seedData: CRMData = {
   users: [],
   suppliers: [],
-  accountTiers: [
+  buyerTiers: [
     {
       id: 'tier-standard',
       name: 'Standard',
@@ -32,17 +32,9 @@ export const seedData: CRMData = {
     { id: 'shipped', name: 'Shipped', order: 3 },
     { id: 'completed', name: 'Completed', order: 4 },
   ],
-  accounts: [],
-  retailers: [],
+  buyers: [],
   products: [],
   orders: [],
-  activities: [],
-  events: [],
-  quotes: [],
-  invoices: [],
   auditLogs: [],
 };
-
-
-
 

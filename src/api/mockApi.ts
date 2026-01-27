@@ -1,20 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { seedData } from '../data/mockData';
-import type {
-  Account,
-  Activity,
-  AuditLog,
-  CalendarEvent,
-  CRMData,
-  Invoice,
-  Order,
-  OrderStatusId,
-  Product,
-  Quote,
-  Retailer,
-  Supplier,
-  User,
-} from '../types';
+import type { Buyer, AuditLog, CRMData, Order, OrderStatusId, Product, Supplier, User } from '../types';
 
 const STORAGE_KEY = 'wholesale-crm-mock-v12';
 const USER_KEY = 'wholesale-crm-current-user';
@@ -39,6 +25,8 @@ const migrateData = (data: CRMData): CRMData => {
   }
 
   dbCopy.suppliers = clone(dbCopy.suppliers ?? []);
+  dbCopy.buyers = clone(dbCopy.buyers ?? []);
+  dbCopy.buyerTiers = clone(dbCopy.buyerTiers ?? []);
 
   const normalizeStatus = (status: string): OrderStatusId => {
     switch (status) {
@@ -83,6 +71,7 @@ const migrateData = (data: CRMData): CRMData => {
 
   dbCopy.orders = dbCopy.orders.map((order) => ({
     ...order,
+    buyerId: (order as any).buyerId ?? (order as any).accountId ?? dbCopy.buyers[0]?.id ?? 'buyer-default',
     status: normalizeStatus(order.status as string),
     approvalStatus: order.approvalStatus ?? 'pending',
     createdBy: order.createdBy ?? dbCopy.users[0]?.id ?? 'system',
@@ -225,7 +214,7 @@ export const api = {
       role: User['role'];
       password?: string;
       supplierId?: string;
-      companyId?: string;
+      buyerId?: string;
       permissions?: User['permissions'];
     },
   ): Promise<User> {
@@ -250,11 +239,11 @@ export const api = {
         }
         input.supplierId = creator.supplierId;
       } else if (buyerAdmin) {
-        if (!creator.companyId) throw new Error('Creator missing company scope');
+        if (!creator.buyerId) throw new Error('Creator missing company scope');
         if (!['buyer_manager', 'buyer'].includes(input.role)) {
           throw new Error('Buyer admins can only create buyer managers or users');
         }
-        input.companyId = creator.companyId;
+        input.buyerId = creator.buyerId;
       } else {
         throw new Error('Only superadmin or company admins can create users');
       }
@@ -263,7 +252,7 @@ export const api = {
       if (['supplier', 'supplier_admin', 'supplier_manager'].includes(input.role) && !input.supplierId) {
         throw new Error('Supplier users must be tied to a supplier');
       }
-      if (['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role) && !input.companyId) {
+      if (['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role) && !input.buyerId) {
         throw new Error('Buyer users must be tied to a buyer company');
       }
     }
@@ -272,10 +261,10 @@ export const api = {
     if (['supplier', 'supplier_admin', 'supplier_manager'].includes(input.role) && !input.supplierId) {
       throw new Error('Supplier users must be tied to a supplier');
     }
-    if (['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role) && !input.companyId) {
+    if (['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role) && !input.buyerId) {
       throw new Error('Buyer users must be tied to a buyer company');
     }
-    if (input.role === 'admin' && !input.supplierId && !input.companyId) {
+    if (input.role === 'admin' && !input.supplierId && !input.buyerId) {
       throw new Error('Admin must belong to a supplier or buyer company');
     }
 
@@ -285,7 +274,7 @@ export const api = {
       email: input.email,
       role: input.role,
       supplierId: input.supplierId,
-      companyId: input.companyId,
+      buyerId: input.buyerId,
       permissions: input.permissions,
       password: input.password ?? 'demo123',
     };
@@ -295,7 +284,7 @@ export const api = {
       summary: `User ${user.email} created`,
       actorId: creatorId,
       actorRole: creator?.role,
-      companyId: user.companyId,
+      buyerId: user.buyerId,
       supplierId: user.supplierId,
       entityType: 'user',
       entityId: user.id,
@@ -319,7 +308,7 @@ export const api = {
       summary: `User ${existing.email} updated`,
       actorId,
       actorRole: actor.role,
-      companyId: existing.companyId,
+      buyerId: existing.buyerId,
       supplierId: existing.supplierId,
       entityType: 'user',
       entityId: existing.id,
@@ -342,7 +331,7 @@ export const api = {
       summary: `User ${existing?.email ?? id} deleted`,
       actorId,
       actorRole: actor.role,
-      companyId: existing?.companyId,
+      buyerId: existing?.buyerId,
       supplierId: existing?.supplierId,
       entityType: 'user',
       entityId: id,
@@ -351,10 +340,6 @@ export const api = {
     });
     persist();
     return delay(true);
-  },
-
-  async listRetailers(): Promise<Retailer[]> {
-    return delay(db.retailers);
   },
 
   async listSuppliers(): Promise<Supplier[]> {
@@ -373,6 +358,7 @@ export const api = {
       summary: `Supplier ${supplier.name} created`,
       actorId: creatorId,
       actorRole: creator?.role,
+      supplierId: supplier.id,
       entityType: 'supplier',
       entityId: supplier.id,
       entityName: supplier.name,
@@ -395,6 +381,7 @@ export const api = {
       summary: `Supplier ${existing.name} updated`,
       actorId: creatorId,
       actorRole: creator.role,
+      supplierId: existing.id,
       entityType: 'supplier',
       entityId: existing.id,
       entityName: existing.name,
@@ -416,6 +403,7 @@ export const api = {
       summary: `Supplier ${existing?.name ?? id} deleted`,
       actorId: creatorId,
       actorRole: creator.role,
+      supplierId: id,
       entityType: 'supplier',
       entityId: id,
       entityName: existing?.name ?? id,
@@ -425,92 +413,55 @@ export const api = {
     return delay(true);
   },
 
-  async createRetailer(input: Omit<Retailer, 'id' | 'createdAt'>): Promise<Retailer> {
-    const retailer: Retailer = {
-      ...input,
-      id: uuid(),
-      createdAt: new Date().toISOString(),
-    };
-    db.retailers.push(retailer);
-    logEvent({
-      action: 'retailer.created',
-      summary: `Retailer ${retailer.name} created`,
-      companyId: retailer.accountId,
-      entityType: 'retailer',
-      entityId: retailer.id,
-      entityName: retailer.name,
-      source: 'ui',
-    });
-    persist();
-    return delay(retailer);
-  },
-
-  async updateRetailer(id: string, updates: Partial<Retailer>): Promise<Retailer> {
-    const existing = findById(db.retailers, id);
-    if (!existing) {
-      throw new Error('Retailer not found');
-    }
-    Object.assign(existing, updates);
-    logEvent({
-      action: 'retailer.updated',
-      summary: `Retailer ${existing.name} updated`,
-      companyId: existing.accountId,
-      entityType: 'retailer',
-      entityId: existing.id,
-      entityName: existing.name,
-      source: 'ui',
-    });
-    persist();
-    return delay(existing);
-  },
-
-  async listAccounts(): Promise<Account[]> {
+  async listBuyers(): Promise<Buyer[]> {
     const viewer = getStoredUser();
-    if (!viewer || viewer.role === 'superadmin') return delay(db.accounts);
+    if (!viewer || viewer.role === 'superadmin') return delay(db.buyers);
     if (hasBuyerScope(viewer)) {
-      return delay(db.accounts.filter((a) => a.id === viewer.companyId));
+      return delay(db.buyers.filter((b) => b.id === viewer.buyerId));
     }
-    return delay(db.accounts);
+    return delay(db.buyers);
   },
 
-  async createAccount(input: Omit<Account, 'id' | 'createdAt'>, creatorId?: string): Promise<Account> {
+  async createBuyer(input: Omit<Buyer, 'id' | 'createdAt'>, creatorId?: string): Promise<Buyer> {
     const actor = creatorId ? getUserById(creatorId) : getStoredUser();
     if (!actor || !isSuperAdmin(actor)) {
       throw new Error('Only superadmin can create buyer companies');
     }
-    const account: Account = {
+    const buyer: Buyer = {
       ...input,
       id: uuid(),
       createdAt: new Date().toISOString(),
     };
-    db.accounts.push(account);
+    db.buyers.push(buyer);
     logEvent({
-      action: 'account.created',
-      summary: `Account ${account.name} created`,
-      companyId: account.id,
-      entityType: 'account',
-      entityId: account.id,
-      entityName: account.name,
+      action: 'buyer.created',
+      summary: `Buyer ${buyer.name} created`,
+      actorId: actor.id,
+      actorRole: actor.role,
+      buyerId: buyer.id,
+      entityType: 'buyer',
+      entityId: buyer.id,
+      entityName: buyer.name,
       source: 'ui',
     });
     persist();
-    return delay(account);
+    return delay(buyer);
   },
 
-  async deleteAccount(actorId: string, id: string): Promise<boolean> {
+  async deleteBuyer(actorId: string, id: string): Promise<boolean> {
     const actor = db.users.find((u) => u.id === actorId);
     if (!actor || actor.role !== 'superadmin') {
       throw new Error('Only superadmin can delete buyer companies');
     }
-    const existing = findById(db.accounts, id);
-    db.accounts = db.accounts.filter((a) => a.id !== id);
+    const existing = findById(db.buyers, id);
+    db.buyers = db.buyers.filter((b) => b.id !== id);
     logEvent({
-      action: 'account.deleted' as AuditLog['action'],
-      summary: `Account ${existing?.name ?? id} deleted`,
+      action: 'buyer.deleted' as AuditLog['action'],
+      summary: `Buyer ${existing?.name ?? id} deleted`,
       actorId,
       actorRole: actor.role,
-      companyId: id,
-      entityType: 'account',
+      buyerId: id,
+      entityType: 'buyer',
       entityId: id,
       entityName: existing?.name ?? id,
       source: 'ui',
@@ -519,17 +470,21 @@ export const api = {
     return delay(true);
   },
 
-  async updateAccount(id: string, updates: Partial<Account>): Promise<Account> {
-    const existing = findById(db.accounts, id);
+  async updateBuyer(actorId: string, id: string, updates: Partial<Buyer>): Promise<Buyer> {
+    const existing = findById(db.buyers, id);
     if (!existing) {
-      throw new Error('Account not found');
+      throw new Error('Buyer not found');
     }
+    const actor = getUserById(actorId);
     Object.assign(existing, updates);
     logEvent({
-      action: 'account.updated',
-      summary: `Account ${existing.name} updated`,
-      companyId: existing.id,
-      entityType: 'account',
+      action: 'buyer.updated',
+      summary: `Buyer ${existing.name} updated`,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
+      buyerId: existing.id,
+      entityType: 'buyer',
       entityId: existing.id,
       entityName: existing.name,
       source: 'ui',
@@ -538,15 +493,15 @@ export const api = {
     return delay(existing);
   },
 
-  async listAccountTiers() {
-    return delay(db.accountTiers);
+  async listBuyerTiers() {
+    return delay(db.buyerTiers);
   },
 
   async listOrders(): Promise<Order[]> {
     const viewer = getStoredUser();
     if (!viewer || viewer.role === 'superadmin') return delay(db.orders);
     if (hasBuyerScope(viewer)) {
-      return delay(db.orders.filter((o) => o.accountId === viewer.companyId));
+      return delay(db.orders.filter((o) => o.buyerId === viewer.buyerId));
     }
     if (hasSupplierScope(viewer) || viewer.role === 'admin') {
       return delay(
@@ -568,8 +523,8 @@ export const api = {
   ): Promise<Order> {
     const creator = getUserById(input.createdBy) ?? getStoredUser();
     if (creator && hasBuyerScope(creator)) {
-      if (!creator.companyId) throw new Error('Buyer must belong to a company to place orders');
-      if (input.accountId !== creator.companyId) {
+      if (!creator.buyerId) throw new Error('Buyer must belong to a company to place orders');
+      if (input.buyerId !== creator.buyerId) {
         throw new Error('Buyers can only create orders for their own company');
       }
     }
@@ -577,8 +532,8 @@ export const api = {
       throw new Error('Suppliers cannot create orders');
     }
     if (creator && creator.role === 'admin') {
-      if (!creator.companyId && !creator.supplierId) throw new Error('Admin must be scoped to a company or supplier');
-      if (creator.companyId && input.accountId !== creator.companyId) {
+      if (!creator.buyerId && !creator.supplierId) throw new Error('Admin must be scoped to a company or supplier');
+      if (creator.buyerId && input.buyerId !== creator.buyerId) {
         throw new Error('Scoped admin can only create orders for their company');
       }
       if (creator.supplierId && input.supplierId && input.supplierId !== creator.supplierId) {
@@ -617,7 +572,7 @@ export const api = {
       summary: `Order ${order.orderNumber} created`,
       actorId: creator?.id,
       actorRole: creator?.role,
-      companyId: order.accountId,
+      buyerId: order.buyerId,
       supplierId: order.supplierId,
       entityType: 'order',
       entityId: order.id,
@@ -638,14 +593,14 @@ export const api = {
     if (!actor) {
       throw new Error('Authentication required to update orders');
     }
-    if (actor && hasBuyerScope(actor) && existing.accountId !== actor.companyId) {
+    if (actor && hasBuyerScope(actor) && existing.buyerId !== actor.buyerId) {
       throw new Error('Buyers can only modify their company orders');
     }
     if (actor && hasSupplierScope(actor) && existing.supplierId !== actor.supplierId) {
       throw new Error('Suppliers can only modify their supplier orders');
     }
     if (actor && actor.role === 'admin') {
-      if (actor.companyId && existing.accountId !== actor.companyId) {
+      if (actor.buyerId && existing.buyerId !== actor.buyerId) {
         throw new Error('Scoped admin cannot modify other buyer orders');
       }
       if (actor.supplierId && existing.supplierId !== actor.supplierId) {
@@ -658,7 +613,7 @@ export const api = {
 
     if (updates.approvalStatus && updates.approvalStatus !== existing.approvalStatus) {
       const canBuyerApprove =
-        (isBuyerAdmin(actor) || isBuyerManager(actor)) && actor.companyId === existing.accountId;
+        (isBuyerAdmin(actor) || isBuyerManager(actor)) && actor.buyerId === existing.buyerId;
       const canSuperApprove = isSuperAdmin(actor);
       const supplierReject = hasSupplierScope(actor) && updates.approvalStatus === 'rejected';
       if (!canBuyerApprove && !canSuperApprove && !supplierReject) {
@@ -692,7 +647,7 @@ export const api = {
       summary: `Order ${existing.orderNumber} updated`,
       actorId: actor?.id,
       actorRole: actor?.role,
-      companyId: existing.accountId,
+      buyerId: existing.buyerId,
       supplierId: existing.supplierId,
       entityType: 'order',
       entityId: existing.id,
@@ -704,13 +659,17 @@ export const api = {
     return delay(existing);
   },
 
-  async deleteOrder(id: string): Promise<boolean> {
+  async deleteOrder(actorId: string, id: string): Promise<boolean> {
     const existing = findById(db.orders, id);
+    const actor = getUserById(actorId);
     db.orders = db.orders.filter((o) => o.id !== id);
     logEvent({
       action: 'order.deleted',
       summary: `Order ${existing?.orderNumber ?? id} deleted`,
-      companyId: existing?.accountId,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
+      buyerId: existing?.buyerId,
       supplierId: existing?.supplierId,
       entityType: 'order',
       entityId: existing?.id ?? id,
@@ -727,22 +686,40 @@ export const api = {
       throw new Error('Order not found');
     }
     const actor = getStoredUser();
-    if (actor && hasBuyerScope(actor)) {
-      throw new Error('Buyers cannot move order status');
+    
+    // Only buyer admins/managers can mark order as completed
+    if (statusId === 'completed') {
+      const isBuyerApprover = actor && (isBuyerAdmin(actor) || isBuyerManager(actor));
+      const isBuyerScopedCorrectly = actor?.buyerId === existing.buyerId;
+      if (!isBuyerApprover || !isBuyerScopedCorrectly) {
+        throw new Error('Only the buyer can mark the order as completed!');
+      }
+      if (existing.status !== 'shipped') {
+        throw new Error('Order must be shipped before it can be marked as completed');
+      }
+    } else {
+      // For all other status changes, only suppliers can move orders
+      if (actor && hasBuyerScope(actor)) {
+        throw new Error('Buyers cannot move order status (except to completed)');
+      }
+      if (actor && hasSupplierScope(actor) && existing.supplierId !== actor.supplierId) {
+        throw new Error('Cannot move orders outside your supplier scope');
+      }
+      if (existing.status === 'pending_buyer_approval' || existing.status === 'draft' || existing.status === 'rejected_by_buyer') {
+        throw new Error('Supplier cannot act on orders that are not sent to supplier');
+      }
     }
-    if (actor && hasSupplierScope(actor) && existing.supplierId !== actor.supplierId) {
-      throw new Error('Cannot move orders outside your supplier scope');
-    }
-    if (existing.status === 'pending_buyer_approval' || existing.status === 'draft' || existing.status === 'rejected_by_buyer') {
-      throw new Error('Supplier cannot act on orders that are not sent to supplier');
-    }
+    
     let targetStatus: OrderStatusId = statusId;
     if (statusId === 'confirmed' || statusId === 'accepted_by_supplier') {
       targetStatus = 'accepted_by_supplier';
-    } else if (statusId === 'shipped' || statusId === 'completed') {
-      if (existing.status !== 'accepted_by_supplier' && existing.status !== 'confirmed') {
+    } else if (statusId === 'shipped') {
+      if (existing.status !== 'accepted_by_supplier' && existing.status !== 'confirmed' && existing.status !== 'shipped') {
         throw new Error('Order must be accepted by supplier before shipment');
       }
+      targetStatus = statusId;
+    } else if (statusId === 'completed') {
+      // Already validated above
       targetStatus = statusId;
     }
     assertForwardOnly(existing.status, targetStatus);
@@ -752,7 +729,7 @@ export const api = {
       summary: `Order ${existing.orderNumber} moved to ${statusId}`,
       actorId: actor?.id,
       actorRole: actor?.role,
-      companyId: existing.accountId,
+      buyerId: existing.buyerId,
       supplierId: existing.supplierId,
       entityType: 'order',
       entityId: existing.id,
@@ -764,11 +741,12 @@ export const api = {
     return delay(existing);
   },
 
-  async duplicateOrder(id: string): Promise<Order> {
+  async duplicateOrder(actorId: string, id: string): Promise<Order> {
     const existing = findById(db.orders, id);
     if (!existing) {
       throw new Error('Order not found');
     }
+    const actor = getUserById(actorId);
     const copy: Order = {
       ...clone(existing),
       id: uuid(),
@@ -784,7 +762,10 @@ export const api = {
     logEvent({
       action: 'order.duplicated',
       summary: `Order ${existing.orderNumber} duplicated`,
-      companyId: existing.accountId,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
+      buyerId: existing.buyerId,
       supplierId: existing.supplierId,
       entityType: 'order',
       entityId: copy.id,
@@ -796,73 +777,6 @@ export const api = {
     return delay(copy);
   },
 
-  async listActivities(): Promise<Activity[]> {
-    return delay(db.activities);
-  },
-
-  async createActivity(input: Omit<Activity, 'id' | 'createdAt'>): Promise<Activity> {
-    const activity: Activity = {
-      ...input,
-      id: uuid(),
-      createdAt: new Date().toISOString(),
-    };
-    db.activities.unshift(activity);
-    logEvent({
-      action: 'activity.created',
-      summary: `${activity.type} created: ${activity.subject}`,
-      actorId: activity.ownerId,
-      companyId: activity.accountId,
-      entityType: 'activity',
-      entityId: activity.id,
-      entityName: activity.subject,
-      metadata: { status: activity.status ?? 'open' },
-      source: 'ui',
-    });
-    persist();
-    return delay(activity);
-  },
-
-  async toggleActivity(id: string): Promise<Activity> {
-    const existing = findById(db.activities, id);
-    if (!existing) {
-      throw new Error('Activity not found');
-    }
-    existing.status = existing.status === 'done' ? 'open' : 'done';
-    logEvent({
-      action: 'activity.toggled',
-      summary: `Activity ${existing.subject} marked ${existing.status}`,
-      actorId: existing.ownerId,
-      companyId: existing.accountId,
-      entityType: 'activity',
-      entityId: existing.id,
-      entityName: existing.subject,
-      metadata: { status: existing.status },
-      source: 'ui',
-    });
-    persist();
-    return delay(existing);
-  },
-
-  async listEvents(): Promise<CalendarEvent[]> {
-    return delay(db.events);
-  },
-
-  async createEvent(input: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> {
-    const event: CalendarEvent = { ...input, id: uuid() };
-    db.events.push(event);
-    logEvent({
-      action: 'event.created',
-      summary: `Event ${event.title} created`,
-      entityType: 'event',
-      entityId: event.id,
-      entityName: event.title,
-      companyId: event.orderId,
-      source: 'ui',
-    });
-    persist();
-    return delay(event);
-  },
-
   async listProducts(): Promise<Product[]> {
     const viewer = getStoredUser();
     if (!viewer || viewer.role === 'superadmin') return delay(db.products);
@@ -872,8 +786,8 @@ export const api = {
     return delay(db.products);
   },
 
-  async createProduct(input: Omit<Product, 'id'>): Promise<Product> {
-    const creator = getStoredUser();
+  async createProduct(actorId: string, input: Omit<Product, 'id'>): Promise<Product> {
+    const creator = getUserById(actorId) ?? getStoredUser();
     if (creator && hasBuyerScope(creator)) {
       throw new Error('Buyers cannot create products');
     }
@@ -894,6 +808,9 @@ export const api = {
     logEvent({
       action: 'product.created',
       summary: `Product ${product.name} created`,
+      actorId: creator?.id,
+      actorName: creator?.name,
+      actorRole: creator?.role,
       supplierId: product.supplierId,
       entityType: 'product',
       entityId: product.id,
@@ -904,12 +821,12 @@ export const api = {
     return delay(product);
   },
 
-  async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
+  async updateProduct(actorId: string, id: string, updates: Partial<Product>): Promise<Product> {
     const existing = findById(db.products, id);
     if (!existing) {
       throw new Error('Product not found');
     }
-    const actor = getStoredUser();
+    const actor = getUserById(actorId) ?? getStoredUser();
     if (actor && hasBuyerScope(actor)) {
       throw new Error('Buyers cannot modify products');
     }
@@ -926,6 +843,9 @@ export const api = {
     logEvent({
       action: 'product.updated',
       summary: `Product ${existing.name} updated`,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
       supplierId: existing.supplierId,
       entityType: 'product',
       entityId: existing.id,
@@ -936,9 +856,9 @@ export const api = {
     return delay(existing);
   },
 
-  async deleteProduct(id: string): Promise<boolean> {
+  async deleteProduct(actorId: string, id: string): Promise<boolean> {
     const existing = findById(db.products, id);
-    const actor = getStoredUser();
+    const actor = getUserById(actorId) ?? getStoredUser();
     if (actor && hasBuyerScope(actor)) {
       throw new Error('Buyers cannot delete products');
     }
@@ -952,6 +872,9 @@ export const api = {
     logEvent({
       action: 'product.deleted',
       summary: `Product ${existing?.name ?? id} deleted`,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
       supplierId: existing?.supplierId,
       entityType: 'product',
       entityId: existing?.id ?? id,
@@ -962,89 +885,12 @@ export const api = {
     return delay(true);
   },
 
-  async listQuotes(): Promise<Quote[]> {
-    return delay(db.quotes);
-  },
-
-  async createQuote(input: Omit<Quote, 'id' | 'createdAt'>): Promise<Quote> {
-    const quote: Quote = { ...input, id: uuid(), createdAt: new Date().toISOString() };
-    db.quotes.push(quote);
-    logEvent({
-      action: 'quote.created',
-      summary: `Quote ${quote.name} created`,
-      entityType: 'quote',
-      entityId: quote.id,
-      entityName: quote.name,
-      companyId: quote.orderId,
-      source: 'ui',
-    });
-    persist();
-    return delay(quote);
-  },
-
-  async updateQuote(id: string, updates: Partial<Quote>): Promise<Quote> {
-    const existing = findById(db.quotes, id);
-    if (!existing) {
-      throw new Error('Quote not found');
-    }
-    Object.assign(existing, updates);
-    logEvent({
-      action: 'quote.updated',
-      summary: `Quote ${existing.name} updated`,
-      entityType: 'quote',
-      entityId: existing.id,
-      entityName: existing.name,
-      companyId: existing.orderId,
-      source: 'ui',
-    });
-    persist();
-    return delay(existing);
-  },
-
-  async listInvoices(): Promise<Invoice[]> {
-    return delay(db.invoices);
-  },
-
-  async createInvoice(input: Omit<Invoice, 'id' | 'createdAt'>): Promise<Invoice> {
-    const invoice: Invoice = { ...input, id: uuid(), createdAt: new Date().toISOString() };
-    db.invoices.push(invoice);
-    logEvent({
-      action: 'invoice.created',
-      summary: `Invoice ${invoice.id} created`,
-      entityType: 'invoice',
-      entityId: invoice.id,
-      entityName: invoice.id,
-      companyId: invoice.orderId,
-      source: 'ui',
-    });
-    persist();
-    return delay(invoice);
-  },
-
-  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
-    const existing = findById(db.invoices, id);
-    if (!existing) {
-      throw new Error('Invoice not found');
-    }
-    Object.assign(existing, updates);
-    logEvent({
-      action: 'invoice.updated',
-      summary: `Invoice ${existing.id} updated`,
-      entityType: 'invoice',
-      entityId: existing.id,
-      entityName: existing.id,
-      companyId: existing.orderId,
-      source: 'ui',
-    });
-    persist();
-    return delay(existing);
-  },
-
   async listOrderStatuses(): Promise<CRMData['orderStatuses']> {
     return delay(db.orderStatuses);
   },
 
-  async addOrderStatus(name: string): Promise<CRMData['orderStatuses'][number]> {
+  async addOrderStatus(actorId: string, name: string): Promise<CRMData['orderStatuses'][number]> {
+    const actor = getUserById(actorId);
     const status = {
       id: (name.trim().toLowerCase().replace(/\s+/g, '-') || uuid()) as OrderStatusId,
       name,
@@ -1054,6 +900,9 @@ export const api = {
     logEvent({
       action: 'order.status_added',
       summary: `Order status ${status.name} added`,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
       entityType: 'order_status',
       entityId: status.id,
       entityName: status.name,
@@ -1065,74 +914,111 @@ export const api = {
 
   async listAuditLogs(params: {
     cursor?: { index: number } | null;
-    companyId?: string;
+    buyerId?: string;
     supplierId?: string;
     role?: User['role'];
   }): Promise<{ items: AuditLog[]; nextCursor: { index: number } | null }> {
     const viewer = getStoredUser();
     const role = params.role ?? viewer?.role;
-    const companyScope = params.companyId ?? viewer?.companyId;
+    const companyScope = params.buyerId ?? viewer?.buyerId;
     const supplierScope = params.supplierId ?? viewer?.supplierId;
 
     const isSuper = role === 'superadmin';
-    const isBuyerRole = role ? hasBuyerScope({ role, companyId: companyScope } as User) : false;
+    const isBuyerRole = role ? hasBuyerScope({ role, buyerId: companyScope } as User) : false;
     const isSupplierRole = role
       ? hasSupplierScope({ role, supplierId: supplierScope } as User) || role === 'admin'
       : false;
 
-    let filtered = db.auditLogs;
-    if (!isSuper) {
-      filtered = filtered.filter((log) => {
-        if (isBuyerRole && companyScope) {
-          return log.companyId === companyScope;
-        }
-        if (isSupplierRole && supplierScope) {
-          return log.supplierId === supplierScope;
-        }
-        return false;
-      });
-    }
-    if (params.companyId) {
-      filtered = filtered.filter((log) => log.companyId === params.companyId);
-    }
-    if (params.supplierId) {
-      filtered = filtered.filter((log) => log.supplierId === params.supplierId);
-    }
+    // Single-pass filter for better performance
+    const filtered = db.auditLogs.filter((log) => {
+      // Superadmin sees all logs
+      if (isSuper) {
+        // Apply explicit filters if provided
+        if (params.buyerId && log.buyerId !== params.buyerId) return false;
+        if (params.supplierId && log.supplierId !== params.supplierId) return false;
+        return true;
+      }
+      
+      // Role-based filtering
+      if (isBuyerRole && companyScope) {
+        return log.buyerId === companyScope;
+      }
+      if (isSupplierRole && supplierScope) {
+        return log.supplierId === supplierScope;
+      }
+      
+      return false;
+    });
 
     const start = params.cursor?.index ?? 0;
     const end = start + PAGE_SIZE;
     const items = filtered.slice(start, end);
     const nextCursor = end < filtered.length ? { index: end } : null;
-    return delay({ items, nextCursor });
+    return delay({ items, nextCursor }, 50); // Reduced delay from 140ms to 50ms
   },
 
-  async exportAuditLogs(params: {
+  async exportAuditLogs(actorId: string, params: {
     from: string;
     to: string;
-    companyId?: string;
+    buyerId?: string;
     supplierId?: string;
   }): Promise<AuditLog[]> {
     const fromDate = new Date(params.from);
+    fromDate.setHours(0, 0, 0, 0); // Start of the from date
+    
     const toDate = new Date(params.to);
+    toDate.setHours(23, 59, 59, 999); // End of the to date
+    
     const rangeMs = toDate.getTime() - fromDate.getTime();
     const days = rangeMs / (1000 * 60 * 60 * 24);
     if (days > AUDIT_LIMIT_PER_EXPORT_DAYS) {
       throw new Error('Export range cannot exceed 1 year');
     }
+    
+    const actor = getUserById(actorId);
+    const viewer = getStoredUser();
+    const role = actor?.role ?? viewer?.role;
+    const companyScope = params.buyerId ?? viewer?.buyerId;
+    const supplierScope = params.supplierId ?? viewer?.supplierId;
+
+    const isSuper = role === 'superadmin';
+    const isBuyerRole = role ? hasBuyerScope({ role, buyerId: companyScope } as User) : false;
+    const isSupplierRole = role
+      ? hasSupplierScope({ role, supplierId: supplierScope } as User) || role === 'admin'
+      : false;
+    
+    // Filter logs by date range and role-based access
     let filtered = db.auditLogs.filter((log) => {
       const ts = new Date(log.timestamp).getTime();
-      return ts >= fromDate.getTime() && ts <= toDate.getTime();
+      const inDateRange = ts >= fromDate.getTime() && ts <= toDate.getTime();
+      
+      if (!inDateRange) return false;
+      
+      // Apply role-based filtering
+      if (isSuper) {
+        // Superadmin sees all logs (with optional filters)
+        if (params.buyerId && log.buyerId !== params.buyerId) return false;
+        if (params.supplierId && log.supplierId !== params.supplierId) return false;
+        return true;
+      }
+      
+      if (isBuyerRole && companyScope) {
+        return log.buyerId === companyScope;
+      }
+      if (isSupplierRole && supplierScope) {
+        return log.supplierId === supplierScope;
+      }
+      
+      return false;
     });
-    if (params.companyId) {
-      filtered = filtered.filter((log) => log.companyId === params.companyId);
-    }
-    if (params.supplierId) {
-      filtered = filtered.filter((log) => log.supplierId === params.supplierId);
-    }
+    
     logEvent({
       action: 'audit.exported',
       summary: `Audit export from ${params.from} to ${params.to}`,
-      companyId: params.companyId,
+      actorId: actor?.id,
+      actorName: actor?.name,
+      actorRole: actor?.role,
+      buyerId: params.buyerId,
       supplierId: params.supplierId,
       entityType: 'audit',
       entityId: `export-${Date.now()}`,
@@ -1150,3 +1036,7 @@ export const api = {
     }
   },
 };
+
+
+
+

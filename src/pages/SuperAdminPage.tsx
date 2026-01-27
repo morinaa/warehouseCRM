@@ -42,7 +42,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { api } from '../api/mockApi';
-import type { Account, Order, OrderStatusId, Product, User } from '../types';
+import type { Buyer, Order, OrderStatusId, Product, User } from '../types';
 import { useAuth } from '../providers/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 import { SearchIcon } from '@chakra-ui/icons';
@@ -253,7 +253,7 @@ type NewUserForm = {
   role: User['role'];
   password: string;
   supplierId?: string;
-  companyId?: string;
+  buyerId?: string;
 };
 
 type NewSupplierForm = {
@@ -270,7 +270,7 @@ const emptyUser: NewUserForm = {
   role: 'supplier_admin',
   password: 'demo123',
   supplierId: '',
-  companyId: '',
+  buyerId: '',
 };
 
 const emptySupplier: NewSupplierForm = {
@@ -298,7 +298,7 @@ type ProductForm = {
 type OrderForm = {
   id?: string;
   orderNumber: string;
-  accountId: string;
+  buyerId: string;
   supplierId: string;
   status: OrderStatusId;
   orderValue: number;
@@ -401,13 +401,13 @@ const SuperAdminPage = () => {
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: api.listSuppliers });
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.listProducts });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: api.listOrders });
-  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: api.listAccounts });
+  const { data: buyers = [] } = useQuery({ queryKey: ['buyers'], queryFn: api.listBuyers });
 
   const [newUser, setNewUser] = useState<NewUserForm>(emptyUser);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newSupplier, setNewSupplier] = useState<NewSupplierForm>(emptySupplier);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
-  const [buyerForm, setBuyerForm] = useState<(Partial<Account> & { id?: string }) | null>(null);
+  const [buyerForm, setBuyerForm] = useState<(Partial<Buyer> & { id?: string }) | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [orderForm, setOrderForm] = useState<OrderForm | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<
@@ -431,7 +431,7 @@ const SuperAdminPage = () => {
                 email: newUser.email,
                 role: newUser.role,
                 supplierId: newUser.supplierId || undefined,
-                companyId: newUser.companyId || undefined,
+                buyerId: newUser.buyerId || undefined,
                 password: newUser.password,
               },
             });
@@ -470,7 +470,7 @@ const SuperAdminPage = () => {
             });
           } else {
             await createBuyer.mutateAsync({
-              name: buyerForm.name,
+              name: buyerForm.name ?? 'New Buyer',
               channel: toTitle(buyerForm.channel ?? ''),
               region: toTitle(buyerForm.region ?? ''),
               website: buyerForm.website,
@@ -509,7 +509,7 @@ const SuperAdminPage = () => {
   const resetOrderForm = () => {
     setOrderForm({
       orderNumber: `ORD-${orders.length + 101}`,
-      accountId: accounts[0]?.id ?? '',
+      buyerId: buyers[0]?.id ?? '',
       supplierId: suppliers[0]?.id ?? '',
       status: 'pending',
       orderValue: 0,
@@ -528,7 +528,7 @@ const SuperAdminPage = () => {
         role: input.role,
         password: input.password,
         supplierId: input.role.includes('supplier') ? input.supplierId : undefined,
-        companyId: input.role.includes('buyer') ? input.companyId : undefined,
+        buyerId: input.role.includes('buyer') ? input.buyerId : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -600,7 +600,7 @@ const SuperAdminPage = () => {
   });
 
   const deleteProduct = useMutation({
-    mutationFn: api.deleteProduct,
+    mutationFn: (id: string) => api.deleteProduct(user?.id ?? '', id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({ title: 'Product deleted', status: 'success' });
@@ -608,7 +608,7 @@ const SuperAdminPage = () => {
   });
 
   const createProduct = useMutation({
-    mutationFn: api.createProduct,
+    mutationFn: (input: Omit<Product, 'id'>) => api.createProduct(user?.id ?? '', input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({ title: 'Product created', status: 'success' });
@@ -616,7 +616,7 @@ const SuperAdminPage = () => {
   });
 
   const updateProduct = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Product> }) => api.updateProduct(id, updates),
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Product> }) => api.updateProduct(user?.id ?? '', id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({ title: 'Product updated', status: 'success' });
@@ -624,7 +624,7 @@ const SuperAdminPage = () => {
   });
 
   const deleteOrder = useMutation({
-    mutationFn: api.deleteOrder,
+    mutationFn: (id: string) => api.deleteOrder(user?.id ?? '', id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       toast({ title: 'Order deleted', status: 'success' });
@@ -648,25 +648,25 @@ const SuperAdminPage = () => {
   });
 
   const createBuyer = useMutation({
-    mutationFn: (input: Omit<Account, 'id' | 'createdAt'>) => api.createAccount(input, user?.id),
+    mutationFn: (input: Omit<Buyer, 'id' | 'createdAt'>) => api.createBuyer(input, user?.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['buyers'] });
       toast({ title: 'Buyer created', status: 'success' });
       setBuyerForm(null);
     },
   });
   const updateBuyer = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Account> }) => api.updateAccount(id, updates),
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Buyer> }) => api.updateBuyer(user?.id ?? '', id, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['buyers'] });
       toast({ title: 'Buyer updated', status: 'success' });
       setBuyerForm(null);
     },
   });
   const deleteBuyer = useMutation({
-    mutationFn: (id: string) => api.deleteAccount(user?.id ?? '', id),
+    mutationFn: (id: string) => api.deleteBuyer(user?.id ?? '', id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['buyers'] });
       toast({ title: 'Buyer deleted', status: 'success' });
     },
   });
@@ -760,7 +760,7 @@ const SuperAdminPage = () => {
                     </Td>
                     <Td>
                       <Badge variant="subtle">
-                        {accounts.find((a) => a.id === u.companyId)?.name ??
+                        {buyers.find((b) => b.id === u.buyerId)?.name ??
                           suppliers.find((s) => s.id === u.supplierId)?.name ??
                           '—'}
                       </Badge>
@@ -778,7 +778,7 @@ const SuperAdminPage = () => {
                               role: u.role,
                               password: u.password ?? 'demo123',
                               supplierId: u.supplierId ?? '',
-                              companyId: u.companyId ?? '',
+                              buyerId: u.buyerId ?? '',
                             });
                             userModal.onOpen();
                           }}
@@ -890,24 +890,24 @@ const SuperAdminPage = () => {
             </Button>
           </Flex>
           <Stack spacing={3}>
-            {accounts.map((a) => (
-              <Box key={a.id} borderWidth="1px" rounded="md" p={3}>
+            {buyers.map((b) => (
+              <Box key={b.id} borderWidth="1px" rounded="md" p={3}>
                 <Flex justify="space-between" align="start" gap={3}>
                   <Box>
-                    <Text fontWeight="semibold">{a.name}</Text>
+                    <Text fontWeight="semibold">{b.name}</Text>
                     <Text fontSize="sm" color="gray.600">
-                      {a.region ?? 'Region'} · {a.channel ?? 'Channel'}
+                      {b.region ?? 'Region'} · {b.channel ?? 'Channel'}
                     </Text>
                   </Box>
                   <HStack>
-                    <Button size="xs" variant="ghost" onClick={() => setBuyerForm({ ...a })}>
+                    <Button size="xs" variant="ghost" onClick={() => setBuyerForm({ ...b })}>
                       Edit
                     </Button>
                     <Button
                       size="xs"
                       variant="ghost"
                       colorScheme="red"
-                      onClick={() => setPendingConfirm({ type: 'buyer', action: 'delete', id: a.id })}
+                      onClick={() => setPendingConfirm({ type: 'buyer', action: 'delete', id: b.id })}
                       isLoading={deleteBuyer.isPending}
                     >
                       Delete
@@ -1035,7 +1035,7 @@ const SuperAdminPage = () => {
                     <Td>
                       <Text fontWeight="semibold">{o.orderNumber}</Text>
                       <Text fontSize="sm" color="gray.600">
-                        {o.accountId}
+                        {o.buyerId}
                       </Text>
                     </Td>
                     <Td>
@@ -1059,7 +1059,7 @@ const SuperAdminPage = () => {
                           setOrderForm({
                             id: o.id,
                             orderNumber: o.orderNumber,
-                            accountId: o.accountId,
+                            buyerId: o.buyerId,
                             supplierId: o.supplierId ?? suppliers[0]?.id ?? '',
                             status: o.status,
                             orderValue: o.orderValue,
@@ -1157,10 +1157,10 @@ const SuperAdminPage = () => {
                   <FormLabel>Buyer account</FormLabel>
                   <Select
                     placeholder="Select buyer company"
-                    value={newUser.companyId}
-                    onChange={(e) => setNewUser({ ...newUser, companyId: e.target.value })}
+                    value={newUser.buyerId}
+                    onChange={(e) => setNewUser({ ...newUser, buyerId: e.target.value })}
                   >
-                    {accounts.map((a) => (
+                    {buyers.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name}
                       </option>
@@ -1198,7 +1198,7 @@ const SuperAdminPage = () => {
                   (newUser.role === 'buyer_admin' ||
                     newUser.role === 'buyer_manager' ||
                     newUser.role === 'buyer') &&
-                  !newUser.companyId
+                  !newUser.buyerId
                 ) {
                   toast({ title: 'Select buyer company', description: 'Choose a buyer company for this user', status: 'warning' });
                   return;
@@ -1565,10 +1565,10 @@ const SuperAdminPage = () => {
                   <FormControl>
                     <FormLabel>Buyer account</FormLabel>
                     <Select
-                      value={orderForm.accountId}
-                      onChange={(e) => setOrderForm({ ...orderForm, accountId: e.target.value })}
+                      value={orderForm.buyerId}
+                      onChange={(e) => setOrderForm({ ...orderForm, buyerId: e.target.value })}
                     >
-                      {accounts.map((a) => (
+                      {buyers.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
                         </option>
@@ -1669,7 +1669,7 @@ const SuperAdminPage = () => {
                 const lineTotal = (orderForm.quantity ?? 0) * (orderForm.unitPrice ?? 0);
                 const payload = {
                   orderNumber: orderForm.orderNumber,
-                  accountId: orderForm.accountId,
+                  buyerId: orderForm.buyerId,
                   supplierId: orderForm.supplierId,
                   status: orderForm.status,
                   orderValue: orderForm.orderValue || lineTotal,

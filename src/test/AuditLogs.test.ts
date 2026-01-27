@@ -14,7 +14,7 @@ describe('Audit logs', () => {
     // Generate >20 audit events via lightweight order status adds
     for (let i = 0; i < 25; i += 1) {
       // eslint-disable-next-line no-await-in-loop
-      await api.addOrderStatus(`Status-${i}`);
+      await api.addOrderStatus('u-super', `Status-${i}`);
     }
 
     const page1 = await api.listAuditLogs({ cursor: { index: 0 }, role: 'superadmin' });
@@ -33,7 +33,7 @@ describe('Audit logs', () => {
     const to = '2026-01-02';
 
     await expect(
-      api.exportAuditLogs({
+      api.exportAuditLogs('u-super', {
         from,
         to,
       }),
@@ -43,24 +43,24 @@ describe('Audit logs', () => {
   it('scopes buyer admin to their company even without stored user', async () => {
     const api = await loadApi();
 
-    const targetCompany = 'ac-scope-test';
-    // generate a company-scoped audit log via admin user creation
+    const targetBuyer = 'buyer-scope-test';
+    // generate a buyer-scoped audit log via admin user creation
     await api.adminCreateUser('u-super', {
       name: 'Scoped Buyer',
       email: 'scoped@buyer.com',
       role: 'buyer',
-      companyId: targetCompany,
+      buyerId: targetBuyer,
     });
 
     const buyerView = await api.listAuditLogs({
       role: 'buyer_admin',
-      companyId: targetCompany,
+      buyerId: targetBuyer,
       cursor: { index: 0 },
     });
 
-    expect(buyerView.items.some((log) => log.companyId === targetCompany)).toBe(true);
+    expect(buyerView.items.some((log) => log.buyerId === targetBuyer)).toBe(true);
     expect(
-      buyerView.items.every((log) => log.companyId === targetCompany),
+      buyerView.items.every((log) => log.buyerId === targetBuyer),
     ).toBe(true);
   });
 });

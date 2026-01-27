@@ -179,7 +179,7 @@ describe('RBAC and order state machine enforcement', () => {
       password: 'demo123',
     });
     await api.login({ email: supplierManager.email, password: 'demo123' });
-    const product = await api.createProduct({
+    const product = await api.createProduct(supplierManager.id, {
       supplierId,
       name: 'RBAC Drink',
       sku: 'RBAC-DRINK',
@@ -200,7 +200,7 @@ describe('RBAC and order state machine enforcement', () => {
     });
     await api.login({ email: supplierUser.email, password: 'demo123' });
     await expect(
-      api.createProduct({
+      api.createProduct(supplierUser.id, {
         supplierId,
         name: 'Blocked Product',
         sku: 'RBAC-BLOCK',
@@ -212,9 +212,9 @@ describe('RBAC and order state machine enforcement', () => {
       }),
     ).rejects.toThrow(/only supplier admins or managers/i);
 
-    await api.login(buyerAdminCreds);
+    const buyerAdmin = await api.login(buyerAdminCreds);
     await expect(
-      api.createProduct({
+      api.createProduct(buyerAdmin.id, {
         supplierId,
         name: 'Buyer Product',
         sku: 'RBAC-BUYER',

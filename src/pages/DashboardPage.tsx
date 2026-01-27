@@ -1,4 +1,4 @@
-﻿import {
+import {
   Badge,
   Box,
   Card,
@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api/mockApi';
 import StatCard from '../components/StatCard';
-import type { Order, Activity } from '../types';
+import type { Order } from '../types';
 import { FiPackage, FiTrendingUp, FiUsers, FiZap, FiBox, FiBriefcase } from 'react-icons/fi';
 
 const daysSince = (dateStr?: string) => {
@@ -33,7 +33,7 @@ const DashboardPage = () => {
     queryKey: ['orderStatuses'],
     queryFn: api.listOrderStatuses,
   });
-  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: api.listAccounts });
+  const { data: buyers = [] } = useQuery({ queryKey: ['buyers'], queryFn: api.listBuyers });
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.listProducts });
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: api.listSuppliers });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers });
@@ -49,9 +49,9 @@ const DashboardPage = () => {
     count: orders.filter((o) => o.status === status.id).length,
   }));
 
-  const reorderAlerts = accounts
-    .filter((account) => account.lastOrderDate && daysSince(account.lastOrderDate) > 30)
-    .sort((a, b) => daysSince(b.lastOrderDate) - daysSince(a.lastOrderDate))
+  const reorderAlerts = buyers
+    .filter((buyer) => buyer.lastOrderDate && daysSince(buyer.lastOrderDate) > 30)
+    .sort((a, b) => daysSince(b.lastOrderDate!) - daysSince(a.lastOrderDate!))
     .slice(0, 4);
 
   const lowStock = products
@@ -79,7 +79,7 @@ const DashboardPage = () => {
       <Stack spacing={6}>
         <Heading size="lg">Wholesale control tower</Heading>
         <SimpleGrid columns={{ base: 1, sm: 2, lg: 5 }} spacing={4}>
-          <StatCard label="Accounts" value={accounts.length} helper="Buyer companies" icon={FiBriefcase} />
+          <StatCard label="Buyers" value={buyers.length} helper="Buyer companies" icon={FiBriefcase} />
           <StatCard
             label="Open order value"
             value={`$${openOrderValue.toLocaleString()}`}
@@ -129,9 +129,9 @@ const DashboardPage = () => {
                 </Badge>
               </Flex>
               <Stack spacing={3}>
-                {reorderAlerts.map((account) => (
+                {reorderAlerts.map((buyer) => (
                   <Box
-                    key={account.id}
+                    key={buyer.id}
                     p={3}
                     borderWidth="1px"
                     borderColor="gray.100"
@@ -140,28 +140,28 @@ const DashboardPage = () => {
                   >
                     <Flex justify="space-between" align="center">
                       <Box>
-                        <Text fontWeight="semibold">{account.name}</Text>
+                        <Text fontWeight="semibold">{buyer.name}</Text>
                         <Text fontSize="sm" color="gray.600">
-                          Last order {account.lastOrderDate ?? 'unknown'}
+                          Last order {buyer.lastOrderDate ?? 'unknown'}
                         </Text>
                       </Box>
                       <Badge colorScheme="orange" variant="subtle">
-                        {daysSince(account.lastOrderDate)} days idle
+                        {daysSince(buyer.lastOrderDate!)} days idle
                       </Badge>
                     </Flex>
                     <HStack spacing={2} mt={2}>
                       <Badge colorScheme="brand" variant="subtle">
-                        {account.paymentTerms}
+                        {buyer.paymentTerms}
                       </Badge>
                       <Badge colorScheme="gray" variant="subtle">
-                        {account.channel ?? 'Channel'}
+                        {buyer.channel ?? 'Channel'}
                       </Badge>
                     </HStack>
                   </Box>
                 ))}
                 {reorderAlerts.length === 0 && (
                   <Text color="gray.600" fontSize="sm">
-                    All accounts have recent orders.
+                    All buyers have recent orders.
                   </Text>
                 )}
               </Stack>
@@ -280,9 +280,9 @@ const DashboardPage = () => {
               </Badge>
             </Flex>
             <Stack spacing={3}>
-              {reorderAlerts.map((account) => (
+              {reorderAlerts.map((buyer) => (
                 <Box
-                  key={account.id}
+                  key={buyer.id}
                   p={3}
                   borderWidth="1px"
                   borderColor="gray.100"
@@ -291,28 +291,28 @@ const DashboardPage = () => {
                 >
                   <Flex justify="space-between" align="center">
                     <Box>
-                      <Text fontWeight="semibold">{account.name}</Text>
+                      <Text fontWeight="semibold">{buyer.name}</Text>
                       <Text fontSize="sm" color="gray.600">
-                        Last order {account.lastOrderDate ?? 'unknown'}
+                        Last order {buyer.lastOrderDate ?? 'unknown'}
                       </Text>
                     </Box>
                     <Badge colorScheme="orange" variant="subtle">
-                      {daysSince(account.lastOrderDate)} days idle
+                      {daysSince(buyer.lastOrderDate!)} days idle
                     </Badge>
                   </Flex>
                   <HStack spacing={2} mt={2}>
                     <Badge colorScheme="brand" variant="subtle">
-                      {account.paymentTerms}
+                      {buyer.paymentTerms}
                     </Badge>
                     <Badge colorScheme="gray" variant="subtle">
-                      {account.channel ?? 'Channel'}
+                      {buyer.channel ?? 'Channel'}
                     </Badge>
                   </HStack>
                 </Box>
               ))}
               {reorderAlerts.length === 0 && (
                 <Text color="gray.600" fontSize="sm">
-                  All accounts have recent orders.
+                  All buyers have recent orders.
                 </Text>
               )}
             </Stack>

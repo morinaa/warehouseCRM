@@ -20,7 +20,7 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/mockApi';
-import type { Account, Order, Product, User } from '../types';
+import type { Buyer, Order, Product, User } from '../types';
 import { useAuth } from '../providers/AuthProvider';
 
 const formatCurrency = (value: number) =>
@@ -29,17 +29,17 @@ const formatCurrency = (value: number) =>
 const HistoryPage = () => {
   const cardBg = useColorModeValue('white', 'gray.800');
   const { user } = useAuth();
-  const { data: accounts = [] } = useQuery({ queryKey: ['accounts', user?.id], queryFn: api.listAccounts });
+  const { data: buyers = [] } = useQuery({ queryKey: ['buyers', user?.id], queryFn: api.listBuyers });
   const { data: orders = [] } = useQuery({ queryKey: ['orders', user?.id], queryFn: api.listOrders });
   const { data: products = [] } = useQuery({ queryKey: ['products', user?.id], queryFn: api.listProducts });
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: api.listSuppliers });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers });
 
-  const companyAccounts = accounts.filter((a: Account) => a.id === user?.companyId);
+  const companyBuyers = buyers.filter((b: Buyer) => b.id === user?.buyerId);
   const supplierProducts = products.filter((p: Product) => p.supplierId === user?.supplierId);
   const supplierOrders = orders.filter((o: Order) => o.supplierId === user?.supplierId);
   const buyerOrders = orders.filter((o: Order) =>
-    companyAccounts.some((acct) => acct.id === o.accountId),
+    companyBuyers.some((buyer) => buyer.id === o.buyerId),
   );
 
   const isBuyer =
@@ -50,7 +50,7 @@ const HistoryPage = () => {
     user?.role === 'supplier_manager';
 
   const scopedUsers = users.filter((u: User) => {
-    if (isBuyer) return u.companyId && u.companyId === user?.companyId;
+    if (isBuyer) return u.buyerId && u.buyerId === user?.buyerId;
     if (isSupplier) return u.supplierId && u.supplierId === user?.supplierId;
     return false;
   });
@@ -97,7 +97,7 @@ const HistoryPage = () => {
                     <Td>
                       {isBuyer
                         ? suppliers.find((s) => s.id === o.supplierId)?.name ?? '—'
-                        : accounts.find((a) => a.id === o.accountId)?.name ?? '—'}
+                        : buyers.find((b) => b.id === o.buyerId)?.name ?? '—'}
                     </Td>
                     <Td>
                       <Badge>{o.status}</Badge>
@@ -114,15 +114,15 @@ const HistoryPage = () => {
           <Heading size="md" mb={3}>
             {isBuyer ? 'Credit & limits' : 'Catalog summary'}
           </Heading>
-          {isBuyer && companyAccounts.length > 0 ? (
+          {isBuyer && companyBuyers.length > 0 ? (
             <Stack spacing={3}>
-              {companyAccounts.map((acct) => (
-                <Box key={acct.id} borderWidth="1px" rounded="md" p={3}>
-                  <Text fontWeight="semibold">{acct.name}</Text>
+              {companyBuyers.map((buyer) => (
+                <Box key={buyer.id} borderWidth="1px" rounded="md" p={3}>
+                  <Text fontWeight="semibold">{buyer.name}</Text>
                   <Text color="gray.600">
-                    Limit {formatCurrency(acct.creditLimit)} · Used {formatCurrency(acct.creditUsed)}
+                    Limit {formatCurrency(buyer.creditLimit)} · Used {formatCurrency(buyer.creditUsed)}
                   </Text>
-                  <Text color="gray.600">Terms {acct.paymentTerms}</Text>
+                  <Text color="gray.600">Terms {buyer.paymentTerms}</Text>
                 </Box>
               ))}
             </Stack>
@@ -183,7 +183,7 @@ const HistoryPage = () => {
                     </Td>
                     <Td>
                       <Text fontSize="sm" color="gray.600">
-                        {u.companyId ?? u.supplierId ?? '—'}
+                        {u.buyerId ?? u.supplierId ?? '—'}
                       </Text>
                     </Td>
                   </Tr>

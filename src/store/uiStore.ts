@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { Activity } from '../types';
 
 type UiState = {
   // Global search from top bar
@@ -11,8 +10,6 @@ type UiState = {
   setRetailerSearch: (value: string) => void;
   accountSearch: string;
   setAccountSearch: (value: string) => void;
-  activityFilter: Activity['type'] | 'all';
-  setActivityFilter: (value: Activity['type'] | 'all') => void;
 
   // Order modal / quick-create
   orderModalOpen: boolean;
@@ -29,8 +26,6 @@ export const useUiStore = create<UiState>((set) => ({
   setRetailerSearch: (value) => set({ retailerSearch: value }),
   accountSearch: '',
   setAccountSearch: (value) => set({ accountSearch: value }),
-  activityFilter: 'all',
-  setActivityFilter: (value) => set({ activityFilter: value }),
 
   orderModalOpen: false,
   orderModalStatusId: undefined,

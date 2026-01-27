@@ -12,7 +12,7 @@ export type User = {
     | 'supplier'
     | 'buyer';
   supplierId?: string;
-  companyId?: string; // buyer org association
+  buyerId?: string; // buyer org association
   permissions?: {
     viewOnly?: boolean;
     canOrder?: boolean;
@@ -31,7 +31,7 @@ export type Supplier = {
   rating?: number;
 };
 
-export type AccountTier = {
+export type BuyerTier = {
   id: string;
   name: string;
   description?: string;
@@ -39,7 +39,7 @@ export type AccountTier = {
   defaultPaymentTerms?: string;
 };
 
-export type Account = {
+export type Buyer = {
   id: string;
   name: string;
   channel?: string;
@@ -51,22 +51,9 @@ export type Account = {
   createdAt: string;
   creditLimit: number;
   creditUsed: number;
-  priceTierId: AccountTier['id'];
+  priceTierId: BuyerTier['id'];
   paymentTerms: string;
   lastOrderDate?: string;
-};
-
-export type Retailer = {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  title?: string;
-  accountId?: string;
-  tags: string[];
-  ownerId?: string;
-  status: 'Active' | 'Prospect' | 'Dormant';
-  createdAt: string;
 };
 
 export type OrderStatusId =
@@ -97,9 +84,8 @@ export type OrderLine = {
 export type Order = {
   id: string;
   orderNumber: string;
-  accountId: string;
+  buyerId: string;
   supplierId?: string;
-  retailerId?: string;
   status: OrderStatusId;
   orderValue: number;
   expectedShipDate?: string;
@@ -114,32 +100,6 @@ export type Order = {
   approverNote?: string;
 };
 
-export type ActivityType = 'note' | 'call' | 'meeting' | 'task' | 'email';
-
-export type Activity = {
-  id: string;
-  type: ActivityType;
-  subject: string;
-  content: string;
-  status?: 'open' | 'done';
-  dueDate?: string;
-  retailerId?: string;
-  accountId?: string;
-  orderId?: string;
-  createdAt: string;
-  ownerId?: string;
-};
-
-export type CalendarEvent = {
-  id: string;
-  title: string;
-  date: string;
-  retailerId?: string;
-  orderId?: string;
-  location?: string;
-  type?: string;
-};
-
 export type ProductStock = {
   stockLevel: number;
   minThreshold: number;
@@ -148,7 +108,7 @@ export type ProductStock = {
 };
 
 export type TierPrice = {
-  tierId: AccountTier['id'];
+  tierId: BuyerTier['id'];
   price: number;
 };
 
@@ -169,34 +129,6 @@ export type Product = {
   tierPrices: TierPrice[];
 };
 
-export type QuoteItem = {
-  productId: string;
-  quantity: number;
-  price: number;
-};
-
-export type Quote = {
-  id: string;
-  name: string;
-  retailerId?: string;
-  orderId?: string;
-  status: 'draft' | 'sent' | 'accepted' | 'lost';
-  total: number;
-  items: QuoteItem[];
-  createdAt: string;
-};
-
-export type Invoice = {
-  id: string;
-  quoteId?: string;
-  orderId?: string;
-  retailerId?: string;
-  status: 'unpaid' | 'paid' | 'overdue';
-  total: number;
-  dueDate: string;
-  createdAt: string;
-};
-
 export type AuditAction =
   | 'order.created'
   | 'order.updated'
@@ -208,19 +140,16 @@ export type AuditAction =
   | 'product.updated'
   | 'product.deleted'
   | 'user.created'
+  | 'user.updated'
+  | 'user.deleted'
   | 'supplier.created'
-  | 'retailer.created'
-  | 'retailer.updated'
-  | 'account.created'
-  | 'account.updated'
-  | 'activity.created'
-  | 'activity.toggled'
-  | 'event.created'
-  | 'quote.created'
-  | 'quote.updated'
-  | 'invoice.created'
-  | 'invoice.updated'
-  | 'audit.exported';
+  | 'supplier.updated'
+  | 'supplier.deleted'
+  | 'buyer.created'
+  | 'buyer.updated'
+  | 'buyer.deleted'
+  | 'audit.exported'
+  | 'audit.cleared';
 
 export type AuditLog = {
   id: string;
@@ -230,7 +159,7 @@ export type AuditLog = {
   actorId?: string;
   actorName?: string;
   actorRole?: User['role'];
-  companyId?: string;
+  buyerId?: string;
   supplierId?: string;
   entityType?: string;
   entityId?: string;
@@ -242,16 +171,11 @@ export type AuditLog = {
 
 export type CRMData = {
   users: User[];
-  retailers: Retailer[];
-  accounts: Account[];
+  buyers: Buyer[];
   suppliers: Supplier[];
   orders: Order[];
-  activities: Activity[];
-  events: CalendarEvent[];
   products: Product[];
-  quotes: Quote[];
-  invoices: Invoice[];
   orderStatuses: OrderStatus[];
-  accountTiers: AccountTier[];
+  buyerTiers: BuyerTier[];
   auditLogs: AuditLog[];
 };

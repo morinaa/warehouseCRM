@@ -37,30 +37,27 @@ const Topbar = () => {
   const setTerm = useUiStore((s) => s.setGlobalSearch);
   const searchDisclosure = useDisclosure();
 
-  const { data: retailers = [] } = useQuery({
-    queryKey: ['retailers'],
-    queryFn: api.listRetailers,
-  });
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: api.listOrders });
-  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: api.listAccounts });
+  const { data: buyers = [] } = useQuery({ queryKey: ['buyers'], queryFn: api.listBuyers });
+  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: api.listSuppliers });
 
   const results = useMemo(() => {
     if (!term.trim()) return [];
     const lower = term.toLowerCase();
     const matches = [
-      ...retailers.map((c) => ({
-        id: c.id,
-        label: c.name,
-        subtitle: c.email,
-        type: 'Retailer',
-        href: '/retailers',
+      ...buyers.map((b) => ({
+        id: b.id,
+        label: b.name,
+        subtitle: b.region ?? '',
+        type: 'Buyer',
+        href: '/orders',
       })),
-      ...accounts.map((c) => ({
-        id: c.id,
-        label: c.name,
-        subtitle: c.channel ?? '',
-        type: 'Account',
-        href: '/accounts',
+      ...suppliers.map((s) => ({
+        id: s.id,
+        label: s.name,
+        subtitle: s.region ?? '',
+        type: 'Supplier',
+        href: '/suppliers',
       })),
       ...orders.map((d) => ({
         id: d.id,
@@ -76,7 +73,7 @@ const Topbar = () => {
         item.subtitle.toLowerCase().includes(lower) ||
         item.type.toLowerCase().includes(lower),
     );
-  }, [term, retailers, orders, accounts]);
+  }, [term, buyers, suppliers, orders]);
 
   return (
     <Flex
@@ -106,7 +103,7 @@ const Topbar = () => {
                 <Icon as={FiSearch} color="gray.500" />
               </InputLeftElement>
               <Input
-                placeholder="Search retailers, orders, accounts..."
+                placeholder="Search buyers, suppliers, orders..."
                 bg="gray.50"
                 borderColor="gray.200"
                 value={term}

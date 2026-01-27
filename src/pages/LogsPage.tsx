@@ -70,8 +70,8 @@ const LogsPage = () => {
   });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const scopeCompanyId = useMemo(
-    () => (user && (user.role === 'buyer' || user.role === 'buyer_admin' || user.role === 'buyer_manager') ? user.companyId : undefined),
+  const scopeBuyerId = useMemo(
+    () => (user && (user.role === 'buyer' || user.role === 'buyer_admin' || user.role === 'buyer_manager') ? user.buyerId : undefined),
     [user],
   );
   const scopeSupplierId = useMemo(
@@ -83,20 +83,23 @@ const LogsPage = () => {
     [user],
   );
 
-  const { data, isLoading, isFetching } = useQuery<{
+  const { data, isLoading, isFetching, isError } = useQuery<{
     items: AuditLog[];
     nextCursor: { index: number } | null;
   }>({
-    queryKey: ['auditLogs', page, user?.id],
+    queryKey: ['auditLogs', page, user?.id, scopeBuyerId, scopeSupplierId],
     queryFn: () =>
       api.listAuditLogs({
         cursor: { index: page * PAGE_SIZE },
-        companyId: scopeCompanyId,
+        buyerId: scopeBuyerId,
         supplierId: scopeSupplierId,
         role: user?.role,
       }),
+    enabled: !!user, // Only run query when user is loaded
     initialData: { items: [], nextCursor: null },
     placeholderData: (prev) => prev,
+    staleTime: 5000, // Cache for 5 seconds to reduce unnecessary refetches
+    retry: 2, // Retry failed requests up to 2 times
   });
 
   const logs = data.items;
@@ -104,7 +107,7 @@ const LogsPage = () => {
   const hasPrev = page > 0;
   const cardBg = useColorModeValue('white', 'gray.800');
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'json' | 'csv') => {
     if (!from || !to) {
       toast({ status: 'warning', title: 'Select From and To dates' });
       return;
@@ -116,22 +119,49 @@ const LogsPage = () => {
       return;
     }
     try {
-      const exportData = await api.exportAuditLogs({
+      const exportData = await api.exportAuditLogs(user?.id ?? '', {
         from,
         to,
-        companyId: scopeCompanyId,
+        buyerId: scopeBuyerId,
         supplierId: scopeSupplierId,
       });
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json',
-      });
+
+      let blob: Blob;
+      let filename: string;
+      
+      if (format === 'csv') {
+        // Convert to CSV
+        const headers = ['Timestamp', 'Action', 'Summary', 'Actor', 'Actor Role', 'Buyer ID', 'Supplier ID', 'Entity Type', 'Entity Name', 'Status'];
+        const csvRows = [
+          headers.join(','),
+          ...exportData.map(log => [
+            `"${log.timestamp}"`,
+            `"${log.action}"`,
+            `"${log.summary.replace(/"/g, '""')}"`,
+            `"${log.actorName || log.actorId || 'System'}"`,
+            `"${log.actorRole || ''}"`,
+            `"${log.buyerId || ''}"`,
+            `"${log.supplierId || ''}"`,
+            `"${log.entityType || ''}"`,
+            `"${log.entityName || ''}"`,
+            `"${log.status || 'success'}"`,
+          ].join(','))
+        ];
+        blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        filename = `audit-${from}-to-${to}.csv`;
+      } else {
+        // JSON format
+        blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        filename = `audit-${from}-to-${to}.json`;
+      }
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `audit-${from}-to-${to}.json`;
+      link.download = filename;
       link.click();
       URL.revokeObjectURL(url);
-      toast({ status: 'success', title: `Exported ${exportData.length} logs` });
+      toast({ status: 'success', title: `Exported ${exportData.length} logs as ${format.toUpperCase()}` });
     } catch (err: any) {
       toast({ status: 'error', title: err?.message ?? 'Export failed' });
     }
@@ -139,15 +169,18 @@ const LogsPage = () => {
 
   return (
     <Stack spacing={6}>
-      <Flex align="center" gap={3}>
+      <Flex align="center" gap={3} wrap="wrap">
         <Heading size="lg">Audit Logs</Heading>
         <Badge colorScheme="blue">20 per page</Badge>
         <Spacer />
-        <HStack spacing={2}>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} max={to} />
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} min={from} />
-          <Button onClick={handleExport} colorScheme="brand" size="sm">
-            Export JSON (≤1y)
+        <HStack spacing={2} flexWrap="wrap">
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} max={to} size="sm" w="140px" />
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} min={from} size="sm" w="140px" />
+          <Button onClick={() => handleExport('json')} colorScheme="brand" size="sm" minW="fit-content" px={4}>
+            Export JSON
+          </Button>
+          <Button onClick={() => handleExport('csv')} colorScheme="green" size="sm" minW="fit-content" px={4}>
+            Export CSV
           </Button>
         </HStack>
       </Flex>
@@ -174,7 +207,7 @@ const LogsPage = () => {
                   <Td>
                     <Text fontWeight="semibold">{log.summary}</Text>
                     <Text fontSize="xs" color="gray.500">
-                      {log.companyId && `Company: ${log.companyId}`} {log.supplierId && `Supplier: ${log.supplierId}`}
+                      {log.buyerId && `Buyer: ${log.buyerId}`} {log.supplierId && `Supplier: ${log.supplierId}`}
                     </Text>
                   </Td>
                   <Td>
@@ -201,11 +234,11 @@ const LogsPage = () => {
                   </Td>
                 </Tr>
               ))}
-              {logs.length === 0 && !isLoading && (
+              {logs.length === 0 && !isLoading && !isFetching && (
                 <Tr>
                   <Td colSpan={6}>
                     <Flex align="center" justify="center" py={6} color="gray.500">
-                      No logs yet. Perform actions to see audit entries.
+                      {isError ? 'Failed to load logs. Please try again.' : 'No logs yet. Perform actions to see audit entries.'}
                     </Flex>
                   </Td>
                 </Tr>
@@ -220,15 +253,27 @@ const LogsPage = () => {
           </Flex>
         )}
 
-        <Flex justify="space-between" align="center" mt={3}>
+        <Flex justify="space-between" align="center" mt={3} flexWrap="wrap" gap={3}>
           <Text fontSize="sm" color="gray.600">
             Showing {logs.length} events (page {page + 1})
           </Text>
-          <HStack>
-            <Button onClick={() => setPage((p) => Math.max(0, p - 1))} isDisabled={!hasPrev}>
+          <HStack spacing={2}>
+            <Button 
+              onClick={() => setPage((p) => Math.max(0, p - 1))} 
+              isDisabled={!hasPrev}
+              size="sm"
+              minW="fit-content"
+              px={4}
+            >
               Previous 20
             </Button>
-            <Button onClick={() => hasNext && setPage((p) => p + 1)} isDisabled={!hasNext}>
+            <Button 
+              onClick={() => hasNext && setPage((p) => p + 1)} 
+              isDisabled={!hasNext}
+              size="sm"
+              minW="fit-content"
+              px={4}
+            >
               Next 20
             </Button>
           </HStack>

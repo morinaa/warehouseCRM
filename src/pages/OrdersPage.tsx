@@ -37,7 +37,7 @@ const OrdersPage = () => {
     queryFn: api.listOrderStatuses,
   });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers });
-  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: api.listAccounts });
+  const { data: buyers = [] } = useQuery({ queryKey: ['buyers'], queryFn: api.listBuyers });
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: api.listSuppliers });
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.listProducts });
 
@@ -68,7 +68,7 @@ const OrdersPage = () => {
   });
 
   const deleteOrder = useMutation({
-    mutationFn: (id: string) => api.deleteOrder(id),
+    mutationFn: (id: string) => api.deleteOrder(user?.id ?? '', id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
   });
 
@@ -79,14 +79,25 @@ const OrdersPage = () => {
   });
 
   const handleMove = (orderId: string, statusId: OrderStatusId) => {
-    if (user?.role === 'buyer' || user?.role === 'buyer_admin' || user?.role === 'buyer_manager') {
+    const isBuyerApprover = user?.role === 'buyer_admin' || user?.role === 'buyer_manager';
+    const isBuyerRegular = user?.role === 'buyer';
+    
+    // Allow buyer admins/managers to mark orders as completed
+    if (statusId === 'completed' && isBuyerApprover) {
+      moveOrder.mutate({ id: orderId, statusId: statusId as OrderStatusId });
+      return;
+    }
+    
+    // Block all buyers from other status changes
+    if (isBuyerRegular || isBuyerApprover) {
       toast({
         title: 'Status is managed by suppliers',
-        description: 'Buyers can track but not change fulfillment steps.',
+        description: 'Buyers can track but not change fulfillment steps (except marking as completed).',
         status: 'info',
       });
       return;
     }
+    
     moveOrder.mutate({ id: orderId, statusId: statusId as OrderStatusId });
   };
 
@@ -295,8 +306,8 @@ const OrdersPage = () => {
                 </HStack>
                 <Text color="gray.600">
                   Buyer:{' '}
-                  {accounts.find((a) => a.id === selectedOrder.accountId)?.name ??
-                    selectedOrder.accountId ??
+                  {buyers.find((b) => b.id === selectedOrder.buyerId)?.name ??
+                    selectedOrder.buyerId ??
                     '—'}
                 </Text>
                 <Text color="gray.600">

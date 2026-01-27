@@ -6,7 +6,6 @@ import AppLayout from './layout/AppLayout';
 import { useAuth } from './providers/AuthProvider';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const RetailersPage = lazy(() => import('./pages/ContactsPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const OrdersPage = lazy(() => import('./pages/OrdersPage'));
@@ -55,7 +54,6 @@ function App() {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="retailers" element={<RetailersPage />} />
           <Route path="history" element={<HistoryPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="orders" element={<OrdersPage />} />

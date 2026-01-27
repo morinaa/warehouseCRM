@@ -117,16 +117,16 @@ const ProductsPage = () => {
   }, [form.supplierId, scopedSupplierId, supplierOptions]);
 
   const createProduct = useMutation({
-    mutationFn: api.createProduct,
+    mutationFn: (input: Omit<Product, 'id'>) => api.createProduct(user?.id ?? '', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
   const updateProduct = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Product> }) =>
-      api.updateProduct(id, updates),
+      api.updateProduct(user?.id ?? '', id, updates),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
   const deleteProduct = useMutation({
-    mutationFn: api.deleteProduct,
+    mutationFn: (id: string) => api.deleteProduct(user?.id ?? '', id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
 

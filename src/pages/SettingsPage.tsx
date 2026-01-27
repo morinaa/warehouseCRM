@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import { api } from '../api/mockApi';
+import { useAuth } from '../providers/AuthProvider';
 
 const SettingsPage = () => {
   const { data: statuses = [] } = useQuery({
@@ -33,11 +34,12 @@ const SettingsPage = () => {
   });
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { user } = useAuth();
   const [stageName, setStageName] = useState('');
-  const [customFields, setCustomFields] = useState<string[]>(['Account tier', 'Region']);
+  const [customFields, setCustomFields] = useState<string[]>(['Buyer tier', 'Region']);
 
   const addStage = useMutation({
-    mutationFn: api.addOrderStatus,
+    mutationFn: (name: string) => api.addOrderStatus(user?.id ?? '', name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orderStatuses'] }),
   });
 
@@ -105,7 +107,7 @@ const SettingsPage = () => {
               <Box key={field} p={3} borderWidth="1px" borderColor="gray.100" rounded="md" bg="gray.50">
                 <Text fontWeight="semibold">{field}</Text>
                 <Text fontSize="sm" color="gray.600">
-                  Required on retailers and orders
+                  Required on buyers and orders
                 </Text>
               </Box>
             ))}
@@ -141,7 +143,7 @@ const SettingsPage = () => {
             <Switch colorScheme="brand" defaultChecked />
           </FormControl>
           <FormControl display="flex" alignItems="center" justifyContent="space-between">
-            <FormLabel m={0}>Auto-assign new retailers</FormLabel>
+            <FormLabel m={0}>Auto-assign new buyers</FormLabel>
             <Switch colorScheme="brand" />
           </FormControl>
           <FormControl display="flex" alignItems="center" justifyContent="space-between">

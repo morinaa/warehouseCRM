@@ -18,7 +18,6 @@ vi.mock('recharts', () => ({
 describe('DashboardPage wholesale widgets', () => {
   beforeEach(() => {
     vi.spyOn(api, 'listRetailers').mockResolvedValue([]);
-    vi.spyOn(api, 'listActivities').mockResolvedValue([]);
     vi.spyOn(api, 'listOrders').mockResolvedValue([
       {
         id: 'o1',
