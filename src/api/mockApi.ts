@@ -16,7 +16,7 @@ import type {
   User,
 } from '../types';
 
-const STORAGE_KEY = 'wholesale-crm-mock-v6';
+const STORAGE_KEY = 'wholesale-crm-mock-v7';
 const USER_KEY = 'wholesale-crm-current-user';
 const PAGE_SIZE = 20;
 const AUDIT_LIMIT_PER_EXPORT_DAYS = 365;
@@ -47,13 +47,9 @@ const migrateData = (data: CRMData): CRMData => {
     }
   };
   ensureUser('super@signalwholesale.com', 'Super Admin', 'superadmin');
-  ensureUser('buyer@signalwholesale.com', 'Buyer Admin', 'buyer_admin', undefined, 'ac-quickstop');
-  ensureUser('buyermgr@signalwholesale.com', 'Buyer Manager', 'buyer_manager', undefined, 'ac-quickstop');
-  ensureUser('buyer2@signalwholesale.com', 'Metro Buyer Admin', 'buyer_admin', undefined, 'ac-metromarket');
-  ensureUser('sparkle@supplier.com', 'Sparkle Admin', 'supplier_admin', 'sup-sparkle');
-  ensureUser('prosnack@supplier.com', 'ProSnack Admin', 'supplier_admin', 'sup-prosnack');
-  ensureUser('freshfarm@supplier.com', 'FreshFarm Admin', 'supplier_admin', 'sup-freshfarm');
-  ensureUser('sparkle.manager@supplier.com', 'Sparkle Manager', 'supplier_manager', 'sup-sparkle');
+  ensureUser('buyer.admin@signalwholesale.com', 'Buyer Admin', 'buyer_admin', undefined, 'ac-quickstop');
+  ensureUser('buyer@signalwholesale.com', 'Buyer User', 'buyer', undefined, 'ac-quickstop');
+  ensureUser('supplier.manager@supplier.com', 'Supplier Manager', 'supplier_manager', 'sup-sparkle');
 
   const seedSuppliers = (seedData.suppliers ?? []).slice(0, 3);
   dbCopy.suppliers = clone(seedSuppliers);

@@ -105,28 +105,16 @@ const AuthPage = ({ mode }: { mode: 'login' | 'signup' }) => {
                 <strong>Super Admin</strong>: super@signalwholesale.com / demo123
               </Box>
               <Box>
-                <strong>Supplier Admin (Sparkle)</strong>: sparkle@supplier.com / demo123
+                <strong>Buyer Admin</strong>: buyer.admin@signalwholesale.com / demo123
               </Box>
               <Box>
-                <strong>Supplier Admin (ProSnack)</strong>: prosnack@supplier.com / demo123
+                <strong>Supplier Manager</strong>: supplier.manager@supplier.com / demo123
               </Box>
               <Box>
-                <strong>Supplier Admin (FreshFarm)</strong>: freshfarm@supplier.com / demo123
-              </Box>
-              <Box>
-                <strong>Buyer</strong>: buyer@signalwholesale.com / demo123
-              </Box>
-              <Box>
-                <strong>Buyer Admin (Metro)</strong>: buyer2@signalwholesale.com / demo123
-              </Box>
-              <Box>
-                <strong>Buyer Manager</strong>: buyermgr@signalwholesale.com / demo123
-              </Box>
-              <Box>
-                <strong>Supplier Manager</strong>: sparkle.manager@supplier.com / demo123
+                <strong>Buyer User</strong>: buyer@signalwholesale.com / demo123
               </Box>
               <Text mt={2} fontSize="xs" color="gray.500">
-                Buyer admins/managers create orders; supplier admins/managers approve or reject. Super admin seeds everything else.
+                One of each: Super Admin seeds, Buyer Admin places orders, Supplier Manager approves, Buyer User tracks.
               </Text>
             </Box>
           </Stack>
