@@ -9,7 +9,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const RetailersPage = lazy(() => import('./pages/ContactsPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
-const OrdersPage = lazy(() => import('./pages/DealsPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
 const SuppliersPage = lazy(() => import('./pages/SuppliersPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 const SupplierDetailPage = lazy(() => import('./pages/SupplierDetailPage'));

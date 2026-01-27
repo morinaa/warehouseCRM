@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { screen } from '@testing-library/react';
 import Sidebar from '../components/Sidebar';
 import ProductsPage from '../pages/ProductsPage';
-import OrdersPage from '../pages/DealsPage';
+import OrdersPage from '../pages/OrdersPage';
 import { renderWithProviders } from './utils';
 import { api } from '../api/mockApi';
 import { useAuth } from '../providers/AuthProvider';
@@ -69,7 +69,7 @@ describe('UI permission gating', () => {
           accountId: 'a1',
           supplierId: 'sup-sparkle',
           orderValue: 100,
-          status: 'pending',
+          status: 'sent_to_supplier',
           items: [],
           createdAt: '2026-01-01',
           approvalStatus: 'pending',
@@ -77,8 +77,10 @@ describe('UI permission gating', () => {
         },
       ]);
       vi.spyOn(api, 'listOrderStatuses').mockResolvedValue([
-        { id: 'pending', name: 'Pending', order: 1 },
-        { id: 'confirmed', name: 'Confirmed', order: 2 },
+        { id: 'pending_buyer_approval', name: 'Pending Buyer Approval', order: 1 },
+        { id: 'sent_to_supplier', name: 'Sent to Supplier', order: 2 },
+        { id: 'accepted_by_supplier', name: 'Accepted by Supplier', order: 3 },
+        { id: 'rejected_by_supplier', name: 'Rejected by Supplier', order: 4 },
       ]);
       vi.spyOn(api, 'listRetailers').mockResolvedValue([]);
       vi.spyOn(api, 'listAccounts').mockResolvedValue([]);

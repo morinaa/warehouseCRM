@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import { screen } from '@testing-library/react';
-import OrdersPage from '../pages/DealsPage';
+import OrdersPage from '../pages/OrdersPage';
 import { renderWithProviders } from './utils';
 import { api } from '../api/mockApi';
 import { useAuth } from '../providers/AuthProvider';

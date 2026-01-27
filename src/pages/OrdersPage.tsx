@@ -44,6 +44,10 @@ const OrdersPage = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
+  const isSupplier =
+    user?.role === 'supplier' || user?.role === 'supplier_admin' || user?.role === 'supplier_manager';
+  const isBuyerRegular = user?.role === 'buyer';
+  const isBuyerApprover = user?.role === 'buyer_admin' || user?.role === 'buyer_manager';
 
   const confirmModal = useDisclosure();
   const viewModal = useDisclosure();
@@ -120,19 +124,32 @@ const OrdersPage = () => {
       return;
     }
     try {
-      await rejectOrder.mutateAsync({ id: orderId, approverId: user.id });
-      await deleteOrder.mutateAsync(orderId);
-      toast({
-        title: 'Order rejected',
-        description: 'Buyer has been notified. Update notes with details if needed.',
-        status: 'info',
-      });
+      if (isSupplierApprover) {
+        await moveOrder.mutateAsync({ id: orderId, statusId: 'rejected_by_supplier' });
+        toast({
+          title: 'Order rejected',
+          description: 'The buyer has been notified of the supplier rejection.',
+          status: 'info',
+        });
+      } else {
+        await rejectOrder.mutateAsync({ id: orderId, approverId: user.id });
+        toast({
+          title: 'Order rejected',
+          description: 'Draft sent back to buyer.',
+          status: 'info',
+        });
+      }
     } catch (error) {
       toast({ title: 'Rejection failed', description: (error as Error).message, status: 'error' });
     }
   };
 
   const sortedStatuses = [...statuses].sort((a, b) => a.order - b.order);
+  const visibleStatuses = isSupplier
+    ? sortedStatuses
+        .filter((s) => ['sent_to_supplier', 'accepted_by_supplier', 'shipped', 'completed'].includes(s.id))
+        .map((s) => (s.id === 'sent_to_supplier' ? { ...s, name: 'Pending' } : s))
+    : sortedStatuses;
   const totalValue = orders.reduce((sum, order) => sum + (order.orderValue ?? 0), 0);
   const userLookup = users.reduce<Record<string, string>>((acc, u) => {
     acc[u.id] = u.name;
@@ -147,13 +164,7 @@ const OrdersPage = () => {
     [products],
   );
   const canCreate = false; // creation removed from status board per request
-  const canApprove =
-    user?.role === 'supplier_manager' ||
-    user?.role === 'supplier_admin' ||
-    user?.role === 'supplier' ||
-    user?.role === 'buyer_manager' ||
-    user?.role === 'buyer_admin' ||
-    user?.role === 'superadmin';
+  const canApprove = isSupplier || isBuyerApprover || user?.role === 'superadmin';
 
   const openConfirm = (id: string, action: 'accept' | 'reject') => {
     setConfirmOrderId(id);
@@ -191,21 +202,25 @@ const OrdersPage = () => {
         <Box>
           <Heading size="lg">Orders</Heading>
           <Text color="gray.600">
-            Suppliers accept/reject and advance orders. Buyers create and track status updates.
+            {isSupplier
+              ? 'Accept or reject orders submitted by buyers.'
+              : 'Create drafts, approve internally, and send to suppliers.'}
           </Text>
+          {(isSupplier || isBuyerRegular) && (
+            <Text color="gray.500" fontSize="sm">
+              Orders are created by your admin/manager.
+            </Text>
+          )}
         </Box>
         <HStack spacing={3}>
           <Badge colorScheme="brand" variant="subtle">
             Total ${totalValue.toLocaleString()}
           </Badge>
-          <Badge colorScheme="gray" variant="subtle">
-            Orders are created by your admin/manager
-          </Badge>
         </HStack>
       </Flex>
 
       <PipelineBoard
-        statuses={sortedStatuses}
+        statuses={visibleStatuses}
         orders={orders}
         onMove={handleMove}
         onNewOrder={canCreate ? () => undefined : undefined}

@@ -45,68 +45,79 @@ const OrderCard = ({
   onApproveOrder?: (orderId: string) => void;
   onRejectOrder?: (orderId: string) => void;
   onSelectOrder?: (orderId: string) => void;
-}) => (
-  <Box
-    bg="white"
-    borderWidth="1px"
-    borderColor="gray.100"
-    rounded="lg"
-    p={3}
-    boxShadow="sm"
-    w="full"
-  >
-    <Flex align="center" justify="space-between">
-      <Text fontWeight="semibold">{order.orderNumber}</Text>
-      {onSelectOrder && (
-        <Link color="brand.600" fontSize="sm" onClick={() => onSelectOrder(order.id)}>
-          View
-        </Link>
-      )}
-    </Flex>
-    <Text fontSize="sm" color="gray.600">
-      ${order.orderValue.toLocaleString()} | {order.warehouse ?? 'Main DC'}
-    </Text>
-    <HStack spacing={2} mt={2}>
-      <Badge colorScheme="gray" variant="subtle">
-        {order.expectedShipDate ? `Ship ${order.expectedShipDate}` : 'Date TBD'}
-      </Badge>
-      <Badge colorScheme="brand" variant="subtle">
-        {order.status}
-      </Badge>
-    </HStack>
-    <HStack spacing={2} mt={2}>
-      <Badge colorScheme="purple" variant="subtle">
-        {userLookup?.[order.createdBy] ? `By ${userLookup[order.createdBy]}` : 'By team'}
-      </Badge>
-      <Badge
-        colorScheme={
-          order.approvalStatus === 'accepted'
-            ? 'green'
-            : order.approvalStatus === 'rejected'
-              ? 'red'
-              : 'orange'
-        }
-        variant="subtle"
-      >
-        {order.approvalStatus}
-      </Badge>
-    </HStack>
-    {currentUserRole !== 'buyer' && order.approvalStatus === 'pending' && (
-      <HStack mt={2}>
-        {onApproveOrder && (
-          <Button size="sm" colorScheme="green" onClick={() => onApproveOrder(order.id)}>
-            Accept
-          </Button>
+}) => {
+  const isBuyerApprover = currentUserRole === 'buyer_admin' || currentUserRole === 'buyer_manager';
+  const isSupplierActor =
+    currentUserRole === 'supplier' || currentUserRole === 'supplier_admin' || currentUserRole === 'supplier_manager';
+  const isSuper = currentUserRole === 'superadmin';
+
+  const canApprove =
+    (isBuyerApprover && order.status === 'pending_buyer_approval') ||
+    (isSupplierActor && order.status === 'sent_to_supplier') ||
+    isSuper;
+  const canReject =
+    (isBuyerApprover && order.status === 'pending_buyer_approval') ||
+    (isSupplierActor && order.status === 'sent_to_supplier') ||
+    isSuper;
+  const showActionRow = isSupplierActor
+    ? order.status === 'sent_to_supplier'
+    : order.approvalStatus === 'pending';
+
+  return (
+    <Box bg="white" borderWidth="1px" borderColor="gray.100" rounded="lg" p={3} boxShadow="sm" w="full">
+      <Flex align="center" justify="space-between">
+        <Text fontWeight="semibold">{order.orderNumber}</Text>
+        {onSelectOrder && (
+          <Link color="brand.600" fontSize="sm" onClick={() => onSelectOrder(order.id)}>
+            View
+          </Link>
         )}
-        {onRejectOrder && (
-          <Button size="sm" variant="outline" colorScheme="red" onClick={() => onRejectOrder(order.id)}>
-            Reject
-          </Button>
-        )}
+      </Flex>
+      <Text fontSize="sm" color="gray.600">
+        ${order.orderValue.toLocaleString()} | {order.warehouse ?? 'Main DC'}
+      </Text>
+      <HStack spacing={2} mt={2}>
+        <Badge colorScheme="gray" variant="subtle">
+          {order.expectedShipDate ? `Ship ${order.expectedShipDate}` : 'Date TBD'}
+        </Badge>
+        <Badge colorScheme="brand" variant="subtle">
+          {order.status}
+        </Badge>
       </HStack>
-    )}
-  </Box>
-);
+      <HStack spacing={2} mt={2}>
+        <Badge colorScheme="purple" variant="subtle">
+          {userLookup?.[order.createdBy] ? `By ${userLookup[order.createdBy]}` : 'By team'}
+        </Badge>
+        <Badge
+          colorScheme={
+            order.approvalStatus === 'accepted'
+              ? 'green'
+              : order.approvalStatus === 'rejected'
+                ? 'red'
+                : 'orange'
+          }
+          variant="subtle"
+        >
+          {order.approvalStatus}
+        </Badge>
+      </HStack>
+      {canApprove && showActionRow && (
+        <HStack mt={2}>
+          {onApproveOrder && (
+            <Button size="sm" colorScheme="green" onClick={() => onApproveOrder(order.id)}>
+              {isSupplierActor ? 'Accept order' : 'Approve & send'}
+            </Button>
+          )}
+          {onRejectOrder && (
+            <Button size="sm" variant="outline" colorScheme="red" onClick={() => onRejectOrder(order.id)}>
+              {isSupplierActor ? 'Reject' : 'Reject draft'}
+            </Button>
+          )}
+        </HStack>
+      )}
+    </Box>
+  );
+};
 
 const SortableOrder = ({
   order,
