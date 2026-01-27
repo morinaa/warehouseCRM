@@ -69,7 +69,17 @@ export type Retailer = {
   createdAt: string;
 };
 
-export type OrderStatusId = 'pending' | 'confirmed' | 'shipped' | 'completed';
+export type OrderStatusId =
+  | 'draft'
+  | 'pending_buyer_approval'
+  | 'rejected_by_buyer'
+  | 'sent_to_supplier'
+  | 'accepted_by_supplier'
+  | 'rejected_by_supplier'
+  | 'pending'
+  | 'confirmed'
+  | 'shipped'
+  | 'completed';
 
 export type OrderStatus = {
   id: OrderStatusId;
@@ -150,6 +160,7 @@ export type Product = {
   basePrice: number;
   currency: string;
   description?: string;
+  originCountry?: string;
   active: boolean;
   category?: string;
   image?: string;

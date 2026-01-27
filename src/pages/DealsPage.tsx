@@ -52,8 +52,8 @@ const OrdersPage = () => {
   const [viewOrderId, setViewOrderId] = useState<string | null>(null);
 
   const approveOrder = useMutation({
-    mutationFn: ({ id, approverId }: { id: string; approverId: string }) =>
-      api.updateOrder(id, { approvalStatus: 'accepted', approvedBy: approverId, status: 'confirmed' }),
+    mutationFn: ({ id, approverId, status }: { id: string; approverId: string; status?: OrderStatusId }) =>
+      api.updateOrder(id, { approvalStatus: 'accepted', approvedBy: approverId, status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
   });
 
@@ -88,14 +88,22 @@ const OrdersPage = () => {
 
   const handleApprove = async (orderId: string) => {
     if (!user?.id) return;
-    if (!['supplier_manager', 'supplier_admin', 'admin', 'superadmin'].includes(user.role as string)) {
-      toast({ title: 'Only manager/admin can accept orders', status: 'warning' });
+    const isBuyerApprover = user.role === 'buyer_admin' || user.role === 'buyer_manager';
+    const isSupplierApprover =
+      user.role === 'supplier_admin' || user.role === 'supplier_manager' || user.role === 'supplier';
+    const isSuper = user.role === 'superadmin';
+    if (!isBuyerApprover && !isSupplierApprover && !isSuper) {
+      toast({ title: 'Only managers or supplier teams can accept orders', status: 'warning' });
       return;
     }
     try {
-      await approveOrder.mutateAsync({ id: orderId, approverId: user.id });
-      await moveOrder.mutateAsync({ id: orderId, statusId: 'confirmed' });
-      toast({ title: 'Order accepted', description: 'Order creator has been notified.', status: 'success' });
+      if (isBuyerApprover || isSuper) {
+        await approveOrder.mutateAsync({ id: orderId, approverId: user.id, status: undefined });
+        toast({ title: 'Order approved', description: 'Sent to supplier for confirmation.', status: 'success' });
+      } else if (isSupplierApprover) {
+        await moveOrder.mutateAsync({ id: orderId, statusId: 'confirmed' });
+        toast({ title: 'Order accepted', description: 'Order creator has been notified.', status: 'success' });
+      }
     } catch (error) {
       toast({ title: 'Approval failed', description: (error as Error).message, status: 'error' });
     }
@@ -103,8 +111,12 @@ const OrdersPage = () => {
 
   const handleReject = async (orderId: string) => {
     if (!user?.id) return;
-    if (!['supplier_manager', 'supplier_admin', 'admin', 'superadmin'].includes(user.role as string)) {
-      toast({ title: 'Only manager/admin can reject orders', status: 'warning' });
+    const isBuyerApprover = user.role === 'buyer_admin' || user.role === 'buyer_manager';
+    const isSupplierApprover =
+      user.role === 'supplier_admin' || user.role === 'supplier_manager' || user.role === 'supplier';
+    const isSuper = user.role === 'superadmin';
+    if (!isBuyerApprover && !isSupplierApprover && !isSuper) {
+      toast({ title: 'Only managers or supplier teams can reject orders', status: 'warning' });
       return;
     }
     try {
@@ -136,7 +148,12 @@ const OrdersPage = () => {
   );
   const canCreate = false; // creation removed from status board per request
   const canApprove =
-    user?.role === 'supplier_manager' || user?.role === 'supplier_admin' || user?.role === 'admin' || user?.role === 'superadmin';
+    user?.role === 'supplier_manager' ||
+    user?.role === 'supplier_admin' ||
+    user?.role === 'supplier' ||
+    user?.role === 'buyer_manager' ||
+    user?.role === 'buyer_admin' ||
+    user?.role === 'superadmin';
 
   const openConfirm = (id: string, action: 'accept' | 'reject') => {
     setConfirmOrderId(id);

@@ -23,7 +23,7 @@ describe('Audit logs', () => {
 
     const page2 = await api.listAuditLogs({ cursor: page1.nextCursor, role: 'superadmin' });
     expect(page2.items.length).toBeGreaterThan(0);
-    expect(page2.items.length).toBe(8); // 25 new + 3 seeded = 28 → remainder after first 20
+    expect(page2.items.length).toBe(5); // 25 generated - first 20 = 5 remaining
     expect(page2.nextCursor).toBeNull();
   });
 

@@ -23,7 +23,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useMemo } from 'react';
-import { FiBell, FiLogOut, FiPlus, FiSearch, FiUser } from 'react-icons/fi';
+import { FiBell, FiLogOut, FiSearch, FiUser } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/mockApi';
@@ -157,16 +157,6 @@ const Topbar = () => {
       </HStack>
 
       <HStack spacing={3}>
-        <Menu>
-          <MenuButton as={Button} leftIcon={<FiPlus />} colorScheme="brand" variant="solid">
-            Quick add
-          </MenuButton>
-          <MenuList>
-            <MenuItem onClick={() => navigate('/retailers')}>New retailer</MenuItem>
-            <MenuItem onClick={() => navigate('/orders')}>New order</MenuItem>
-            <MenuItem onClick={() => navigate('/activities')}>Log activity</MenuItem>
-          </MenuList>
-        </Menu>
         <IconButton aria-label="Notifications" icon={<FiBell />} variant="ghost" />
         <Menu>
           <MenuButton>

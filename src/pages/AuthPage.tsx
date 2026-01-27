@@ -100,22 +100,11 @@ const AuthPage = ({ mode }: { mode: 'login' | 'signup' }) => {
               Signup is disabled. Please contact a Super Admin to create your user.
             </Text>
             <Box fontSize="sm" color="gray.500" lineHeight="1.6">
-              Quick logins:
-              <Box>
-                <strong>Super Admin</strong>: super@signalwholesale.com / demo123
-              </Box>
-              <Box>
-                <strong>Buyer Admin</strong>: buyer.admin@signalwholesale.com / demo123
-              </Box>
-              <Box>
-                <strong>Supplier Manager</strong>: supplier.manager@supplier.com / demo123
-              </Box>
-              <Box>
-                <strong>Buyer User</strong>: buyer@signalwholesale.com / demo123
-              </Box>
-              <Text mt={2} fontSize="xs" color="gray.500">
-                One of each: Super Admin seeds, Buyer Admin places orders, Supplier Manager approves, Buyer User tracks.
+              <Text fontWeight="semibold" mb={1}>
+                Quick login
               </Text>
+              <Text>Super Admin: super@signalwholesale.com / demo123</Text>
+              <Text mt={2}>Create all other users, suppliers, buyers, products, and orders inside the app.</Text>
             </Box>
           </Stack>
         </CardBody>

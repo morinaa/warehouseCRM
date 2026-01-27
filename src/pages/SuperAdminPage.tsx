@@ -2,6 +2,12 @@ import {
   Badge,
   Box,
   Button,
+  AlertDialog,
+  AlertDialogOverlay,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogBody,
+  AlertDialogFooter,
   Flex,
   FormControl,
   FormLabel,
@@ -28,13 +34,218 @@ import {
   Tr,
   useDisclosure,
   useToast,
+  InputGroup,
+  InputLeftElement,
+  List,
+  ListItem,
 } from '@chakra-ui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { api } from '../api/mockApi';
-import type { Order, OrderStatusId, Product, User } from '../types';
+import type { Account, Order, OrderStatusId, Product, User } from '../types';
 import { useAuth } from '../providers/AuthProvider';
 import { useNavigate } from 'react-router-dom';
+import { SearchIcon } from '@chakra-ui/icons';
+
+const COUNTRIES = [
+  'Afghanistan',
+  'Albania',
+  'Algeria',
+  'Andorra',
+  'Angola',
+  'Argentina',
+  'Armenia',
+  'Australia',
+  'Austria',
+  'Azerbaijan',
+  'Bahamas',
+  'Bahrain',
+  'Bangladesh',
+  'Belarus',
+  'Belgium',
+  'Belize',
+  'Benin',
+  'Bhutan',
+  'Bolivia',
+  'Bosnia and Herzegovina',
+  'Botswana',
+  'Brazil',
+  'Brunei',
+  'Bulgaria',
+  'Burkina Faso',
+  'Burundi',
+  'Cambodia',
+  'Cameroon',
+  'Canada',
+  'Cape Verde',
+  'Central African Republic',
+  'Chad',
+  'Chile',
+  'China',
+  'Colombia',
+  'Comoros',
+  'Congo (Democratic Republic)',
+  'Congo (Republic)',
+  'Costa Rica',
+  'Croatia',
+  'Cuba',
+  'Cyprus',
+  'Czechia',
+  'Denmark',
+  'Djibouti',
+  'Dominica',
+  'Dominican Republic',
+  'Ecuador',
+  'Egypt',
+  'El Salvador',
+  'Equatorial Guinea',
+  'Eritrea',
+  'Estonia',
+  'Eswatini',
+  'Ethiopia',
+  'Fiji',
+  'Finland',
+  'France',
+  'Gabon',
+  'Gambia',
+  'Georgia',
+  'Germany',
+  'Ghana',
+  'Greece',
+  'Grenada',
+  'Guatemala',
+  'Guinea',
+  'Guinea-Bissau',
+  'Guyana',
+  'Haiti',
+  'Honduras',
+  'Hungary',
+  'Iceland',
+  'India',
+  'Indonesia',
+  'Iran',
+  'Iraq',
+  'Ireland',
+  'Israel',
+  'Italy',
+  'Jamaica',
+  'Japan',
+  'Jordan',
+  'Kazakhstan',
+  'Kenya',
+  'Kiribati',
+  'Kuwait',
+  'Kyrgyzstan',
+  'Laos',
+  'Latvia',
+  'Lebanon',
+  'Lesotho',
+  'Liberia',
+  'Libya',
+  'Liechtenstein',
+  'Lithuania',
+  'Luxembourg',
+  'Madagascar',
+  'Malawi',
+  'Malaysia',
+  'Maldives',
+  'Mali',
+  'Malta',
+  'Marshall Islands',
+  'Mauritania',
+  'Mauritius',
+  'Mexico',
+  'Micronesia',
+  'Moldova',
+  'Monaco',
+  'Mongolia',
+  'Montenegro',
+  'Morocco',
+  'Mozambique',
+  'Myanmar',
+  'Namibia',
+  'Nauru',
+  'Nepal',
+  'Netherlands',
+  'New Zealand',
+  'Nicaragua',
+  'Niger',
+  'Nigeria',
+  'North Macedonia', 'Kosovo', 'Norway',
+  'Oman',
+  'Pakistan',
+  'Palau',
+  'Panama',
+  'Papua New Guinea',
+  'Paraguay',
+  'Peru',
+  'Philippines',
+  'Poland',
+  'Portugal',
+  'Qatar',
+  'Romania',
+  'Russia',
+  'Rwanda',
+  'Saint Kitts and Nevis',
+  'Saint Lucia',
+  'Saint Vincent and the Grenadines',
+  'Samoa',
+  'San Marino',
+  'Sao Tome and Principe',
+  'Saudi Arabia',
+  'Senegal',
+  'Serbia',
+  'Seychelles',
+  'Sierra Leone',
+  'Singapore',
+  'Slovakia',
+  'Slovenia',
+  'Solomon Islands',
+  'Somalia',
+  'South Africa',
+  'South Korea',
+  'Spain',
+  'Sri Lanka',
+  'Sudan',
+  'Suriname',
+  'Sweden',
+  'Switzerland',
+  'Syria',
+  'Taiwan',
+  'Tajikistan',
+  'Tanzania',
+  'Thailand',
+  'Timor-Leste',
+  'Togo',
+  'Tonga',
+  'Trinidad and Tobago',
+  'Tunisia',
+  'Turkey',
+  'Turkmenistan',
+  'Tuvalu',
+  'Uganda',
+  'Ukraine',
+  'United Arab Emirates',
+  'United Kingdom',
+  'United States',
+  'Uruguay',
+  'Uzbekistan',
+  'Vanuatu',
+  'Venezuela',
+  'Vietnam',
+  'Yemen',
+  'Zambia',
+  'Zimbabwe',
+];
+
+const PRODUCT_CATEGORIES = ['Beverages', 'Snacks', 'Dairy', 'Produce', 'Bakery', 'Household', 'Personal Care'];
+const BUYER_CHANNELS = ['Grocery', 'Convenience', 'Distributor', 'E-commerce', 'Pharmacy', 'Specialty'];
+
+const toTitle = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
 
 type NewUserForm = {
   name: string;
@@ -56,7 +267,7 @@ type NewSupplierForm = {
 const emptyUser: NewUserForm = {
   name: '',
   email: '',
-  role: 'admin',
+  role: 'supplier_admin',
   password: 'demo123',
   supplierId: '',
   companyId: '',
@@ -78,6 +289,7 @@ type ProductForm = {
   currency: string;
   supplierId: string;
   category?: string;
+  originCountry?: string;
   stockLevel: number;
   minThreshold: number;
   images: string[];
@@ -94,6 +306,79 @@ type OrderForm = {
   quantity?: number;
   unitPrice?: number;
   notes?: string;
+};
+
+const CountrySelect = ({
+  label,
+  value,
+  onChange,
+  placeholder = 'Type to search country',
+}: {
+  label: string;
+  value?: string;
+  onChange: (country: string) => void;
+  placeholder?: string;
+}) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const display = query || value || '';
+  const filtered = COUNTRIES.filter((c) => c.toLowerCase().includes(display.toLowerCase()));
+
+  return (
+    <FormControl position="relative">
+      <FormLabel>{label}</FormLabel>
+      <InputGroup>
+        <InputLeftElement pointerEvents="none">
+          <SearchIcon color="gray.400" />
+        </InputLeftElement>
+        <Input
+          value={display}
+          placeholder={placeholder}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+        />
+      </InputGroup>
+      {open && filtered.length > 0 && (
+        <Box
+          mt={1}
+          borderWidth="1px"
+          borderColor="gray.200"
+          rounded="md"
+          bg="white"
+          maxH="180px"
+          overflowY="auto"
+          shadow="sm"
+          zIndex={10}
+          position="absolute"
+          width="full"
+        >
+          <List spacing={0}>
+            {filtered.map((c) => (
+              <ListItem
+                key={c}
+                px={3}
+                py={2}
+                _hover={{ bg: 'gray.50' }}
+                cursor="pointer"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(c);
+                  setQuery('');
+                  setOpen(false);
+                }}
+              >
+                {c}
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      )}
+    </FormControl>
+  );
 };
 
 const SuperAdminPage = () => {
@@ -119,9 +404,92 @@ const SuperAdminPage = () => {
   const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: api.listAccounts });
 
   const [newUser, setNewUser] = useState<NewUserForm>(emptyUser);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newSupplier, setNewSupplier] = useState<NewSupplierForm>(emptySupplier);
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [buyerForm, setBuyerForm] = useState<(Partial<Account> & { id?: string }) | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [orderForm, setOrderForm] = useState<OrderForm | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | null
+    | { type: 'user' | 'supplier' | 'buyer'; action: 'delete' | 'save'; id?: string }
+  >(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+
+  const confirmAndRun = async () => {
+    if (!pendingConfirm) return;
+    try {
+      if (pendingConfirm.type === 'user') {
+        if (pendingConfirm.action === 'delete' && pendingConfirm.id) {
+          await deleteUser.mutateAsync(pendingConfirm.id);
+        } else if (pendingConfirm.action === 'save') {
+          if (editingUserId) {
+            await updateUser.mutateAsync({
+              id: editingUserId,
+              input: {
+                name: newUser.name,
+                email: newUser.email,
+                role: newUser.role,
+                supplierId: newUser.supplierId || undefined,
+                companyId: newUser.companyId || undefined,
+                password: newUser.password,
+              },
+            });
+          } else {
+            await createUser.mutateAsync(newUser);
+          }
+          setNewUser(emptyUser);
+          setEditingUserId(null);
+          userModal.onClose();
+        }
+      } else if (pendingConfirm.type === 'supplier') {
+        if (pendingConfirm.action === 'delete' && pendingConfirm.id) {
+          await deleteSupplier.mutateAsync(pendingConfirm.id);
+        } else if (pendingConfirm.action === 'save') {
+          if (editingSupplierId) {
+            await updateSupplier.mutateAsync(editingSupplierId);
+          } else {
+            await createSupplier.mutateAsync();
+          }
+          setNewSupplier(emptySupplier);
+          setEditingSupplierId(null);
+          supplierModal.onClose();
+        }
+      } else if (pendingConfirm.type === 'buyer') {
+        if (pendingConfirm.action === 'delete' && pendingConfirm.id) {
+          await deleteBuyer.mutateAsync(pendingConfirm.id);
+        } else if (pendingConfirm.action === 'save' && buyerForm) {
+          if (buyerForm.id) {
+            await updateBuyer.mutateAsync({
+              id: buyerForm.id,
+              updates: {
+                ...buyerForm,
+                channel: toTitle(buyerForm.channel ?? ''),
+                region: toTitle(buyerForm.region ?? ''),
+              },
+            });
+          } else {
+            await createBuyer.mutateAsync({
+              name: buyerForm.name,
+              channel: toTitle(buyerForm.channel ?? ''),
+              region: toTitle(buyerForm.region ?? ''),
+              website: buyerForm.website,
+              tags: buyerForm.tags ?? [],
+              creditLimit: buyerForm.creditLimit ?? 0,
+              creditUsed: buyerForm.creditUsed ?? 0,
+              priceTierId: buyerForm.priceTierId ?? 'tier-standard',
+              paymentTerms: buyerForm.paymentTerms ?? 'Net 30',
+            });
+          }
+          setBuyerForm(null);
+        }
+      }
+    } catch (err) {
+      toast({ title: 'Action failed', description: (err as Error).message, status: 'error' });
+    } finally {
+      setPendingConfirm(null);
+    }
+  };
 
   const resetProductForm = () => {
     setProductForm({
@@ -131,6 +499,7 @@ const SuperAdminPage = () => {
       currency: 'USD',
       supplierId: suppliers[0]?.id ?? '',
       category: '',
+      originCountry: '',
       stockLevel: 0,
       minThreshold: 0,
       images: [],
@@ -166,26 +535,67 @@ const SuperAdminPage = () => {
       toast({ title: 'User created', status: 'success' });
     },
   });
+  const updateUser = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<User> }) => api.updateUser(user?.id ?? '', id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast({ title: 'User updated', status: 'success' });
+    },
+  });
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => api.deleteUser(user?.id ?? '', id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast({ title: 'User deleted', status: 'success' });
+    },
+  });
 
   const createSupplier = useMutation({
     mutationFn: () =>
       api.createSupplier(user?.id ?? '', {
         name: newSupplier.name,
-        region: newSupplier.region,
+        region: toTitle(newSupplier.region ?? ''),
         website: newSupplier.website,
         categories: newSupplier.categories
           .split(',')
-          .map((c) => c.trim())
+          .map((c) => toTitle(c))
           .filter(Boolean),
         tags: newSupplier.tags
           .split(',')
-          .map((t) => t.trim())
+          .map((t) => toTitle(t))
           .filter(Boolean),
         rating: 4.0,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       toast({ title: 'Supplier added', status: 'success' });
+    },
+  });
+  const updateSupplier = useMutation({
+    mutationFn: (id: string) =>
+      api.updateSupplier(user?.id ?? '', id, {
+        name: newSupplier.name,
+        region: toTitle(newSupplier.region ?? ''),
+        website: newSupplier.website,
+        categories: newSupplier.categories
+          .split(',')
+          .map((c) => toTitle(c))
+          .filter(Boolean),
+        tags: newSupplier.tags
+          .split(',')
+          .map((t) => toTitle(t))
+          .filter(Boolean),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast({ title: 'Supplier updated', status: 'success' });
+    },
+  });
+  const deleteSupplier = useMutation({
+    mutationFn: (id: string) => api.deleteSupplier(user?.id ?? '', id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast({ title: 'Supplier deleted', status: 'success' });
     },
   });
 
@@ -237,6 +647,30 @@ const SuperAdminPage = () => {
     },
   });
 
+  const createBuyer = useMutation({
+    mutationFn: (input: Omit<Account, 'id' | 'createdAt'>) => api.createAccount(input, user?.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast({ title: 'Buyer created', status: 'success' });
+      setBuyerForm(null);
+    },
+  });
+  const updateBuyer = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Account> }) => api.updateAccount(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast({ title: 'Buyer updated', status: 'success' });
+      setBuyerForm(null);
+    },
+  });
+  const deleteBuyer = useMutation({
+    mutationFn: (id: string) => api.deleteAccount(user?.id ?? '', id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast({ title: 'Buyer deleted', status: 'success' });
+    },
+  });
+
   const userCounts = useMemo(() => {
     return users.reduce<Record<User['role'], number>>(
       (acc, u) => {
@@ -285,11 +719,20 @@ const SuperAdminPage = () => {
         </Box>
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} alignItems="stretch">
+      {/* Users row (full width) */}
+      <Box borderWidth="1px" rounded="lg" p={4} bg="white" boxShadow="sm">
         <Box borderWidth="1px" rounded="lg" p={4} bg="white" boxShadow="sm" height="full">
           <Flex justify="space-between" align="center" mb={3}>
             <Heading size="md">Users</Heading>
-            <Button size="sm" colorScheme="brand" onClick={userModal.onOpen}>
+            <Button
+              size="sm"
+              colorScheme="brand"
+              onClick={() => {
+                setEditingUserId(null);
+                setNewUser(emptyUser);
+                userModal.onOpen();
+              }}
+            >
               Add user
             </Button>
           </Flex>
@@ -299,7 +742,8 @@ const SuperAdminPage = () => {
                 <Tr>
                   <Th>Name</Th>
                   <Th>Role</Th>
-                  <Th>Supplier</Th>
+                  <Th>Company</Th>
+                  <Th></Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -316,8 +760,41 @@ const SuperAdminPage = () => {
                     </Td>
                     <Td>
                       <Badge variant="subtle">
-                        {suppliers.find((s) => s.id === u.supplierId)?.name ?? '—'}
+                        {accounts.find((a) => a.id === u.companyId)?.name ??
+                          suppliers.find((s) => s.id === u.supplierId)?.name ??
+                          '—'}
                       </Badge>
+                    </Td>
+                    <Td textAlign="right">
+                      <HStack justify="flex-end" spacing={2}>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingUserId(u.id);
+                            setNewUser({
+                              name: u.name,
+                              email: u.email,
+                              role: u.role,
+                              password: u.password ?? 'demo123',
+                              supplierId: u.supplierId ?? '',
+                              companyId: u.companyId ?? '',
+                            });
+                            userModal.onOpen();
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          colorScheme="red"
+                          onClick={() => setPendingConfirm({ type: 'user', action: 'delete', id: u.id })}
+                          isLoading={deleteUser.isPending}
+                        >
+                          Delete
+                        </Button>
+                      </HStack>
                     </Td>
                   </Tr>
                 ))}
@@ -325,27 +802,125 @@ const SuperAdminPage = () => {
             </Table>
           </TableContainer>
         </Box>
+      </Box>
 
+      {/* Suppliers and Buyers row */}
+      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} alignItems="stretch">
         <Box borderWidth="1px" rounded="lg" p={4} bg="white" boxShadow="sm" height="full">
           <Flex justify="space-between" align="center" mb={3}>
             <Heading size="md">Suppliers</Heading>
-            <Button size="sm" colorScheme="brand" onClick={supplierModal.onOpen}>
+            <Button
+              size="sm"
+              colorScheme="brand"
+              onClick={() => {
+                setEditingSupplierId(null);
+                setNewSupplier(emptySupplier);
+                supplierModal.onOpen();
+              }}
+            >
               Add supplier
             </Button>
           </Flex>
           <Stack spacing={3}>
             {suppliers.map((s) => (
               <Box key={s.id} borderWidth="1px" rounded="md" p={3}>
-                <Text fontWeight="semibold">{s.name}</Text>
-                <Text fontSize="sm" color="gray.600">
-                  {s.region ?? 'Region'} · {s.categories.join(', ')}
-                </Text>
+                <Flex justify="space-between" align="start" gap={3}>
+                  <Box>
+                    <Text fontWeight="semibold">{s.name}</Text>
+                    <Text fontSize="sm" color="gray.600">
+                      {s.region ?? 'Region'} · {s.categories.join(', ')}
+                    </Text>
+                  </Box>
+                  <HStack>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingSupplierId(s.id);
+                        setNewSupplier({
+                          name: s.name,
+                          region: s.region ?? '',
+                          website: s.website ?? '',
+                          categories: s.categories.join(', '),
+                          tags: (s.tags ?? []).join(', '),
+                        });
+                        supplierModal.onOpen();
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={() => setPendingConfirm({ type: 'supplier', action: 'delete', id: s.id })}
+                      isLoading={deleteSupplier.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </HStack>
+                </Flex>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+
+        <Box borderWidth="1px" rounded="lg" p={4} bg="white" boxShadow="sm" height="full">
+          <Flex justify="space-between" align="center" mb={3}>
+            <Heading size="md">Buyers</Heading>
+            <Button
+              size="sm"
+              colorScheme="brand"
+              onClick={() =>
+                setBuyerForm({
+                  name: '',
+                  channel: '',
+                  region: '',
+                  website: '',
+                  tags: [],
+                  creditLimit: 0,
+                  creditUsed: 0,
+                  priceTierId: 'tier-standard',
+                  paymentTerms: 'Net 30',
+                  ownerId: undefined,
+                })
+              }
+            >
+              Add buyer
+            </Button>
+          </Flex>
+          <Stack spacing={3}>
+            {accounts.map((a) => (
+              <Box key={a.id} borderWidth="1px" rounded="md" p={3}>
+                <Flex justify="space-between" align="start" gap={3}>
+                  <Box>
+                    <Text fontWeight="semibold">{a.name}</Text>
+                    <Text fontSize="sm" color="gray.600">
+                      {a.region ?? 'Region'} · {a.channel ?? 'Channel'}
+                    </Text>
+                  </Box>
+                  <HStack>
+                    <Button size="xs" variant="ghost" onClick={() => setBuyerForm({ ...a })}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={() => setPendingConfirm({ type: 'buyer', action: 'delete', id: a.id })}
+                      isLoading={deleteBuyer.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </HStack>
+                </Flex>
               </Box>
             ))}
           </Stack>
         </Box>
       </SimpleGrid>
 
+      {/* Products and Orders row */}
       <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={6} alignItems="stretch">
         <Box borderWidth="1px" rounded="lg" p={4} bg="white" boxShadow="sm" height="full">
           <Flex justify="space-between" align="center" mb={3}>
@@ -359,7 +934,7 @@ const SuperAdminPage = () => {
                   productModal.onOpen();
                 }}
               >
-                Add
+                Add product
               </Button>
             </HStack>
           </Flex>
@@ -409,12 +984,13 @@ const SuperAdminPage = () => {
                             basePrice: p.basePrice,
                             currency: p.currency,
                             supplierId: p.supplierId ?? suppliers[0]?.id ?? '',
-                            category: p.category,
-                            stockLevel: p.stock?.stockLevel ?? 0,
-                            minThreshold: p.stock?.minThreshold ?? 0,
-                            images: p.images ?? [],
-                          });
-                          productModal.onOpen();
+                          category: p.category,
+                          originCountry: p.originCountry,
+                          stockLevel: p.stock?.stockLevel ?? 0,
+                          minThreshold: p.stock?.minThreshold ?? 0,
+                          images: p.images ?? [],
+                        });
+                        productModal.onOpen();
                         }}
                       >
                         Edit
@@ -439,7 +1015,7 @@ const SuperAdminPage = () => {
                   orderModal.onOpen();
                 }}
               >
-                Add
+                Add order
               </Button>
             </HStack>
           </Flex>
@@ -506,10 +1082,18 @@ const SuperAdminPage = () => {
         </Box>
       </SimpleGrid>
 
-      <Modal isOpen={userModal.isOpen} onClose={userModal.onClose} size="lg">
+      <Modal
+        isOpen={userModal.isOpen}
+        onClose={() => {
+          userModal.onClose();
+          setEditingUserId(null);
+          setNewUser(emptyUser);
+        }}
+        size="lg"
+      >
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Add user</ModalHeader>
+          <ModalHeader>{editingUserId ? 'Edit user' : 'Add user'}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <Stack spacing={3}>
@@ -540,7 +1124,6 @@ const SuperAdminPage = () => {
                     })
                   }
                 >
-                  <option value="admin">Admin</option>
                   <option value="supplier_admin">Supplier Admin</option>
                   <option value="supplier_manager">Supplier Manager</option>
                   <option value="buyer_admin">Buyer Admin</option>
@@ -549,42 +1132,9 @@ const SuperAdminPage = () => {
                   <option value="buyer">Buyer User</option>
                 </Select>
               </FormControl>
-              {newUser.role === 'admin' && (
-                <Stack spacing={2}>
-                  <FormControl>
-                    <FormLabel>Admin scope (supplier)</FormLabel>
-                    <Select
-                      placeholder="Select supplier (optional)"
-                      value={newUser.supplierId}
-                      onChange={(e) => setNewUser({ ...newUser, supplierId: e.target.value })}
-                    >
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel>Admin scope (buyer company)</FormLabel>
-                    <Select
-                      placeholder="Select buyer company (optional)"
-                      value={newUser.companyId}
-                      onChange={(e) => setNewUser({ ...newUser, companyId: e.target.value })}
-                    >
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Text fontSize="sm" color="gray.600">
-                    Admin must belong to either a supplier or buyer company.
-                  </Text>
-                </Stack>
-              )}
-              {(newUser.role === 'supplier_admin' || newUser.role === 'supplier_manager' || newUser.role === 'supplier') && (
+              {(newUser.role === 'supplier_admin' ||
+                newUser.role === 'supplier_manager' ||
+                newUser.role === 'supplier') && (
                 <FormControl>
                   <FormLabel>Supplier</FormLabel>
                   <Select
@@ -600,7 +1150,9 @@ const SuperAdminPage = () => {
                   </Select>
                 </FormControl>
               )}
-              {(newUser.role === 'buyer_admin' || newUser.role === 'buyer_manager' || newUser.role === 'buyer') && (
+              {(newUser.role === 'buyer_admin' ||
+                newUser.role === 'buyer_manager' ||
+                newUser.role === 'buyer') && (
                 <FormControl>
                   <FormLabel>Buyer account</FormLabel>
                   <Select
@@ -619,25 +1171,41 @@ const SuperAdminPage = () => {
             </Stack>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={userModal.onClose}>
+            <Button
+              variant="ghost"
+              mr={3}
+              onClick={() => {
+                setEditingUserId(null);
+                setNewUser(emptyUser);
+                userModal.onClose();
+              }}
+            >
               Cancel
             </Button>
             <Button
               colorScheme="brand"
-              onClick={async () => {
-                try {
-                  if (newUser.role === 'admin' && !newUser.supplierId && !newUser.companyId) {
-                    toast({ title: 'Pick admin scope', description: 'Select a supplier or buyer company', status: 'warning' });
-                    return;
-                  }
-                  await createUser.mutateAsync(newUser);
-                  setNewUser(emptyUser);
-                  userModal.onClose();
-                } catch (err) {
-                  toast({ title: 'Create failed', description: (err as Error).message, status: 'error' });
+              onClick={() => {
+                if (
+                  (newUser.role === 'supplier_admin' ||
+                    newUser.role === 'supplier_manager' ||
+                    newUser.role === 'supplier') &&
+                  !newUser.supplierId
+                ) {
+                  toast({ title: 'Select supplier', description: 'Choose a supplier for this user', status: 'warning' });
+                  return;
                 }
+                if (
+                  (newUser.role === 'buyer_admin' ||
+                    newUser.role === 'buyer_manager' ||
+                    newUser.role === 'buyer') &&
+                  !newUser.companyId
+                ) {
+                  toast({ title: 'Select buyer company', description: 'Choose a buyer company for this user', status: 'warning' });
+                  return;
+                }
+                setPendingConfirm({ type: 'user', action: 'save' });
               }}
-              isLoading={createUser.isPending}
+              isLoading={createUser.isPending || updateUser.isPending}
             >
               Save
             </Button>
@@ -645,10 +1213,44 @@ const SuperAdminPage = () => {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={supplierModal.isOpen} onClose={supplierModal.onClose} size="lg">
+      <AlertDialog
+        isOpen={!!pendingConfirm}
+        leastDestructiveRef={cancelRef}
+        onClose={() => setPendingConfirm(null)}
+      >
+        <AlertDialogOverlay />
+        <AlertDialogContent>
+          <AlertDialogHeader fontSize="lg" fontWeight="bold">
+            Confirm {pendingConfirm?.action === 'delete' ? 'delete' : 'save'}
+          </AlertDialogHeader>
+          <AlertDialogBody>
+            {pendingConfirm?.action === 'delete'
+              ? 'This action cannot be undone. Proceed?'
+              : 'Apply these changes?'}
+          </AlertDialogBody>
+          <AlertDialogFooter>
+            <Button ref={cancelRef} onClick={() => setPendingConfirm(null)}>
+              Cancel
+            </Button>
+            <Button colorScheme="brand" onClick={confirmAndRun} ml={3}>
+              Confirm
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Modal
+        isOpen={supplierModal.isOpen}
+        onClose={() => {
+          setEditingSupplierId(null);
+          setNewSupplier(emptySupplier);
+          supplierModal.onClose();
+        }}
+        size="lg"
+      >
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Add supplier</ModalHeader>
+          <ModalHeader>{editingSupplierId ? 'Edit supplier' : 'Add supplier'}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <Stack spacing={3}>
@@ -656,21 +1258,20 @@ const SuperAdminPage = () => {
                 <FormLabel>Name</FormLabel>
                 <Input value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} />
               </FormControl>
-              <FormControl>
-                <FormLabel>Region</FormLabel>
-                <Input value={newSupplier.region} onChange={(e) => setNewSupplier({ ...newSupplier, region: e.target.value })} />
-              </FormControl>
+              <CountrySelect label="Country" value={newSupplier.region} onChange={(c) => setNewSupplier({ ...newSupplier, region: c })} />
               <FormControl>
                 <FormLabel>Website</FormLabel>
                 <Input value={newSupplier.website} onChange={(e) => setNewSupplier({ ...newSupplier, website: e.target.value })} />
               </FormControl>
-              <FormControl>
-                <FormLabel>Categories (comma separated)</FormLabel>
-                <Input
-                  value={newSupplier.categories}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, categories: e.target.value })}
-                />
-              </FormControl>
+                <FormControl>
+                  <FormLabel>Categories (comma separated)</FormLabel>
+                  <Input
+                    value={newSupplier.categories}
+                    list="category-list"
+                    placeholder="Choose or type categories"
+                    onChange={(e) => setNewSupplier({ ...newSupplier, categories: e.target.value })}
+                  />
+                </FormControl>
               <FormControl>
                 <FormLabel>Tags (comma separated)</FormLabel>
                 <Input value={newSupplier.tags} onChange={(e) => setNewSupplier({ ...newSupplier, tags: e.target.value })} />
@@ -678,25 +1279,121 @@ const SuperAdminPage = () => {
             </Stack>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={supplierModal.onClose}>
+            <Button
+              variant="ghost"
+              mr={3}
+              onClick={() => {
+                setEditingSupplierId(null);
+                setNewSupplier(emptySupplier);
+                supplierModal.onClose();
+              }}
+            >
               Cancel
             </Button>
             <Button
               colorScheme="brand"
-              onClick={async () => {
-                try {
-                  await createSupplier.mutateAsync();
-                  setNewSupplier(emptySupplier);
-                  supplierModal.onClose();
-                } catch (err) {
-                  toast({ title: 'Create failed', description: (err as Error).message, status: 'error' });
-                }
-              }}
-              isLoading={createSupplier.isPending}
+              onClick={() => setPendingConfirm({ type: 'supplier', action: 'save' })}
+              isLoading={createSupplier.isPending || updateSupplier.isPending}
             >
               Save
             </Button>
           </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={!!buyerForm} onClose={() => setBuyerForm(null)} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{buyerForm?.id ? 'Edit buyer' : 'Add buyer'}</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          {buyerForm && (
+            <Stack spacing={3}>
+              <FormControl>
+                <FormLabel>Name</FormLabel>
+                <Input value={buyerForm.name ?? ''} onChange={(e) => setBuyerForm({ ...buyerForm, name: e.target.value })} />
+              </FormControl>
+              <HStack>
+                <FormControl>
+                  <FormLabel>Channel</FormLabel>
+                  <Input
+                    value={buyerForm.channel ?? ''}
+                    list="channel-list"
+                    placeholder="Select or type channel"
+                    onChange={(e) => setBuyerForm({ ...buyerForm, channel: e.target.value })}
+                  />
+                </FormControl>
+                <CountrySelect
+                  label="Country"
+                  value={buyerForm.region ?? ''}
+                  onChange={(c) => setBuyerForm({ ...buyerForm, region: c })}
+                />
+              </HStack>
+              <FormControl>
+                <FormLabel>Website</FormLabel>
+                <Input value={buyerForm.website ?? ''} onChange={(e) => setBuyerForm({ ...buyerForm, website: e.target.value })} />
+              </FormControl>
+              <HStack>
+                <FormControl>
+                  <FormLabel>Credit limit</FormLabel>
+                  <Input
+                    type="number"
+                    value={buyerForm.creditLimit ?? 0}
+                    onChange={(e) => setBuyerForm({ ...buyerForm, creditLimit: Number(e.target.value) })}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Credit used</FormLabel>
+                  <Input
+                    type="number"
+                    value={buyerForm.creditUsed ?? 0}
+                    onChange={(e) => setBuyerForm({ ...buyerForm, creditUsed: Number(e.target.value) })}
+                  />
+                </FormControl>
+              </HStack>
+              <FormControl>
+                <FormLabel>Payment terms</FormLabel>
+                <Input
+                  value={buyerForm.paymentTerms ?? 'Net 30'}
+                  onChange={(e) => setBuyerForm({ ...buyerForm, paymentTerms: e.target.value })}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Tags (comma separated)</FormLabel>
+                <Input
+                  value={(buyerForm.tags ?? []).join(', ')}
+                  onChange={(e) =>
+                    setBuyerForm({
+                      ...buyerForm,
+                      tags: e.target.value
+                        .split(',')
+                        .map((t) => t.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </FormControl>
+            </Stack>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="ghost" mr={3} onClick={() => setBuyerForm(null)}>
+            Cancel
+          </Button>
+          <Button
+            colorScheme="brand"
+            isLoading={createBuyer.isPending || updateBuyer.isPending}
+            onClick={() => {
+              if (!buyerForm?.name?.trim()) {
+                toast({ title: 'Name required', status: 'warning' });
+                return;
+              }
+              setPendingConfirm({ type: 'buyer', action: 'save' });
+            }}
+          >
+            Save
+          </Button>
+        </ModalFooter>
         </ModalContent>
       </Modal>
 
@@ -763,8 +1460,19 @@ const SuperAdminPage = () => {
                 </HStack>
                 <FormControl>
                   <FormLabel>Category</FormLabel>
-                  <Input value={productForm.category ?? ''} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} />
+                  <Input
+                    value={productForm.category ?? ''}
+                    list="category-list"
+                    placeholder="Select or type category"
+                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                  />
                 </FormControl>
+                <CountrySelect
+                  label="Origin country"
+                  value={productForm.originCountry ?? ''}
+                  onChange={(c) => setProductForm({ ...productForm, originCountry: c })}
+                  placeholder="Where is this product sourced?"
+                />
                 <FormControl>
                   <FormLabel>Images (up to 3)</FormLabel>
                   <Input
@@ -815,6 +1523,7 @@ const SuperAdminPage = () => {
                   currency: productForm.currency,
                   supplierId: productForm.supplierId,
                   category: productForm.category,
+                  originCountry: productForm.originCountry,
                   description: '',
                   active: true,
                   image: productForm.images[0],
@@ -993,8 +1702,24 @@ const SuperAdminPage = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      <datalist id="country-list">
+        {COUNTRIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      <datalist id="category-list">
+        {PRODUCT_CATEGORIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      <datalist id="channel-list">
+        {BUYER_CHANNELS.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </Stack>
   );
 };
 
 export default SuperAdminPage;
+

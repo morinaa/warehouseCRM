@@ -16,7 +16,7 @@ import type {
   User,
 } from '../types';
 
-const STORAGE_KEY = 'wholesale-crm-mock-v7';
+const STORAGE_KEY = 'wholesale-crm-mock-v12';
 const USER_KEY = 'wholesale-crm-current-user';
 const PAGE_SIZE = 20;
 const AUDIT_LIMIT_PER_EXPORT_DAYS = 365;
@@ -26,33 +26,19 @@ const canUseStorage = typeof window !== 'undefined' && typeof localStorage !== '
 
 const migrateData = (data: CRMData): CRMData => {
   const dbCopy = clone(data);
-  const ensureUser = (
-    email: string,
-    name: string,
-    role: User['role'],
-    supplierId?: string,
-    companyId?: string,
-  ) => {
-    const existing = dbCopy.users.find((u) => u.email === email);
-    if (!existing) {
-      dbCopy.users.push({
-        id: uuid(),
-        name,
-        email,
-        role,
-        supplierId,
-        companyId,
-        password: 'demo123',
-      });
-    }
-  };
-  ensureUser('super@signalwholesale.com', 'Super Admin', 'superadmin');
-  ensureUser('buyer.admin@signalwholesale.com', 'Buyer Admin', 'buyer_admin', undefined, 'ac-quickstop');
-  ensureUser('buyer@signalwholesale.com', 'Buyer User', 'buyer', undefined, 'ac-quickstop');
-  ensureUser('supplier.manager@supplier.com', 'Supplier Manager', 'supplier_manager', 'sup-sparkle');
+  // Guarantee a single superadmin exists; everything else must be created via UI/API.
+  const superExists = dbCopy.users.some((u) => u.role === 'superadmin');
+  if (!superExists) {
+    dbCopy.users.push({
+      id: 'u-super',
+      name: 'Super Admin',
+      email: 'super@signalwholesale.com',
+      role: 'superadmin',
+      password: 'demo123',
+    });
+  }
 
-  const seedSuppliers = (seedData.suppliers ?? []).slice(0, 3);
-  dbCopy.suppliers = clone(seedSuppliers);
+  dbCopy.suppliers = clone(dbCopy.suppliers ?? []);
 
   const normalizeStatus = (status: string): OrderStatusId => {
     switch (status) {
@@ -73,6 +59,12 @@ const migrateData = (data: CRMData): CRMData => {
   };
 
   dbCopy.orderStatuses = [
+    { id: 'draft', name: 'Draft', order: 0 },
+    { id: 'pending_buyer_approval', name: 'Pending Buyer Approval', order: 0.5 },
+    { id: 'rejected_by_buyer', name: 'Rejected by Buyer', order: 0.6 },
+    { id: 'sent_to_supplier', name: 'Sent to Supplier', order: 0.9 },
+    { id: 'accepted_by_supplier', name: 'Accepted by Supplier', order: 1.5 },
+    { id: 'rejected_by_supplier', name: 'Rejected by Supplier', order: 1.4 },
     { id: 'pending', name: 'Pending', order: 1 },
     { id: 'confirmed', name: 'Confirmed', order: 2 },
     { id: 'shipped', name: 'Shipped', order: 3 },
@@ -80,42 +72,29 @@ const migrateData = (data: CRMData): CRMData => {
   ];
 
   const productSupplierLookup = seedData.products.reduce<Record<string, string>>((acc, p) => {
-    acc[p.id] = p.supplierId ?? seedSuppliers[0]?.id ?? 'sup-default';
+    acc[p.id] = p.supplierId ?? 'sup-default';
     return acc;
   }, {});
 
-  dbCopy.products = dbCopy.products
-    .map((product, idx) => {
-      const seedMatch = seedData.products.find((p) => p.id === product.id);
-      return {
-        ...product,
-        supplierId:
-          product.supplierId ??
-          seedMatch?.supplierId ??
-          seedSuppliers[idx % seedSuppliers.length]?.id,
-      };
-    })
-    .filter((p) => seedSuppliers.some((s) => s.id === p.supplierId));
+  dbCopy.products = dbCopy.products.map((product) => ({
+    ...product,
+    supplierId: product.supplierId ?? productSupplierLookup[product.id],
+  }));
 
-  dbCopy.orders = dbCopy.orders
-    .map((order) => ({
-      ...order,
-      status: normalizeStatus(order.status as string),
-      approvalStatus: order.approvalStatus ?? 'pending',
-      createdBy: order.createdBy ?? dbCopy.users[0]?.id ?? 'system',
-      approvedBy:
-        order.approvalStatus === 'accepted'
-          ? order.approvedBy ?? 'u-supplier'
-          : order.approvedBy,
-      supplierId:
-        order.supplierId ??
-        productSupplierLookup[order.items?.[0]?.productId] ??
-        seedSuppliers[0]?.id,
-      items: (order.items ?? []).filter(
-        (line) => dbCopy.products.find((p) => p.id === line.productId) !== undefined,
-      ),
-    }))
-    .filter((order) => seedSuppliers.some((s) => s.id === order.supplierId));
+  dbCopy.orders = dbCopy.orders.map((order) => ({
+    ...order,
+    status: normalizeStatus(order.status as string),
+    approvalStatus: order.approvalStatus ?? 'pending',
+    createdBy: order.createdBy ?? dbCopy.users[0]?.id ?? 'system',
+    approvedBy:
+      order.approvalStatus === 'accepted'
+        ? order.approvedBy ?? 'u-supplier'
+        : order.approvedBy,
+    supplierId: order.supplierId ?? productSupplierLookup[order.items?.[0]?.productId],
+    items: (order.items ?? []).filter(
+      (line) => dbCopy.products.find((p) => p.id === line.productId) !== undefined,
+    ),
+  }));
 
   dbCopy.auditLogs = dbCopy.auditLogs ?? [];
   return dbCopy;
@@ -162,6 +141,33 @@ const hasSupplierScope = (user?: User) =>
   user && (user.role === 'supplier' || user.role === 'supplier_admin' || user.role === 'supplier_manager');
 const hasBuyerScope = (user?: User) =>
   user && (user.role === 'buyer' || user.role === 'buyer_admin' || user.role === 'buyer_manager');
+
+const isSupplierAdmin = (user?: User) => user?.role === 'supplier_admin';
+const isSupplierManager = (user?: User) => user?.role === 'supplier_manager';
+const isSupplierUser = (user?: User) => user?.role === 'supplier';
+const isBuyerAdmin = (user?: User) => user?.role === 'buyer_admin';
+const isBuyerManager = (user?: User) => user?.role === 'buyer_manager';
+const isBuyerUser = (user?: User) => user?.role === 'buyer';
+const isSuperAdmin = (user?: User) => user?.role === 'superadmin';
+
+const getStatusOrderValue = (status: OrderStatusId) =>
+  db.orderStatuses.find((s) => s.id === status)?.order ?? Number.MAX_SAFE_INTEGER;
+
+const assertForwardOnly = (current: OrderStatusId, next: OrderStatusId) => {
+  if (getStatusOrderValue(next) < getStatusOrderValue(current)) {
+    throw new Error('Invalid status transition: cannot move backwards');
+  }
+};
+
+const requiresBuyerManagerApproval = (
+  order: Order,
+  nextStatus: OrderStatusId,
+  nextApproval: Order['approvalStatus'],
+) => {
+  const creatorRole = getUserById(order.createdBy)?.role;
+  const movingForward = getStatusOrderValue(nextStatus) > getStatusOrderValue('pending');
+  return creatorRole === 'buyer' && movingForward && nextApproval !== 'accepted';
+};
 
 const calculateOrderValue = (items: Order['items']) =>
   items.reduce((sum, item) => sum + item.lineTotal, 0);
@@ -224,31 +230,41 @@ export const api = {
     },
   ): Promise<User> {
     const creator = db.users.find((u) => u.id === creatorId);
-    const isSuper = creator?.role === 'superadmin';
-    const isSupplierAdmin =
-      creator?.role === 'supplier_admin' || creator?.role === 'supplier_manager' || creator?.role === 'supplier';
-    const isBuyerAdmin = creator?.role === 'buyer_admin' || creator?.role === 'buyer_manager' || creator?.role === 'buyer';
+    const isSuper = isSuperAdmin(creator);
+    const supplierAdmin = isSupplierAdmin(creator);
+    const buyerAdmin = isBuyerAdmin(creator);
 
     if (db.users.find((u) => u.email === input.email)) {
       throw new Error('Email already registered');
     }
 
     // Permission gating
+    if (!creator) {
+      throw new Error('Only authenticated admins can create users');
+    }
     if (!isSuper) {
-      if (isSupplierAdmin) {
-        if (!creator?.supplierId) throw new Error('Creator missing supplier scope');
-        if (!['supplier', 'supplier_admin', 'supplier_manager'].includes(input.role)) {
-          throw new Error('Supplier admins can only create supplier users/managers/admins');
+      if (supplierAdmin) {
+        if (!creator.supplierId) throw new Error('Creator missing supplier scope');
+        if (!['supplier_manager', 'supplier'].includes(input.role)) {
+          throw new Error('Supplier admins can only create supplier managers or users');
         }
         input.supplierId = creator.supplierId;
-      } else if (isBuyerAdmin) {
-        if (!creator?.companyId) throw new Error('Creator missing company scope');
-        if (!['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role)) {
-          throw new Error('Buyer admins can only create buyer users/admins/managers');
+      } else if (buyerAdmin) {
+        if (!creator.companyId) throw new Error('Creator missing company scope');
+        if (!['buyer_manager', 'buyer'].includes(input.role)) {
+          throw new Error('Buyer admins can only create buyer managers or users');
         }
         input.companyId = creator.companyId;
       } else {
-        throw new Error('Only admins can create users');
+        throw new Error('Only superadmin or company admins can create users');
+      }
+    } else {
+      // superadmin may optionally scope users when creating
+      if (['supplier', 'supplier_admin', 'supplier_manager'].includes(input.role) && !input.supplierId) {
+        throw new Error('Supplier users must be tied to a supplier');
+      }
+      if (['buyer', 'buyer_admin', 'buyer_manager'].includes(input.role) && !input.companyId) {
+        throw new Error('Buyer users must be tied to a buyer company');
       }
     }
 
@@ -290,6 +306,53 @@ export const api = {
     return delay(user);
   },
 
+  async updateUser(actorId: string, id: string, updates: Partial<User>): Promise<User> {
+    const actor = db.users.find((u) => u.id === actorId);
+    if (!actor || actor.role !== 'superadmin') {
+      throw new Error('Only superadmin can update users');
+    }
+    const existing = findById(db.users, id);
+    if (!existing) throw new Error('User not found');
+    Object.assign(existing, updates);
+    logEvent({
+      action: 'user.updated' as AuditLog['action'],
+      summary: `User ${existing.email} updated`,
+      actorId,
+      actorRole: actor.role,
+      companyId: existing.companyId,
+      supplierId: existing.supplierId,
+      entityType: 'user',
+      entityId: existing.id,
+      entityName: existing.name,
+      source: 'ui',
+    });
+    persist();
+    return delay(existing);
+  },
+
+  async deleteUser(actorId: string, id: string): Promise<boolean> {
+    const actor = db.users.find((u) => u.id === actorId);
+    if (!actor || actor.role !== 'superadmin') {
+      throw new Error('Only superadmin can delete users');
+    }
+    const existing = findById(db.users, id);
+    db.users = db.users.filter((u) => u.id !== id);
+    logEvent({
+      action: 'user.deleted' as AuditLog['action'],
+      summary: `User ${existing?.email ?? id} deleted`,
+      actorId,
+      actorRole: actor.role,
+      companyId: existing?.companyId,
+      supplierId: existing?.supplierId,
+      entityType: 'user',
+      entityId: id,
+      entityName: existing?.name ?? id,
+      source: 'ui',
+    });
+    persist();
+    return delay(true);
+  },
+
   async listRetailers(): Promise<Retailer[]> {
     return delay(db.retailers);
   },
@@ -317,6 +380,49 @@ export const api = {
     });
     persist();
     return delay(supplier);
+  },
+
+  async updateSupplier(creatorId: string, id: string, updates: Partial<Supplier>): Promise<Supplier> {
+    const creator = db.users.find((u) => u.id === creatorId);
+    if (!creator || creator.role !== 'superadmin') {
+      throw new Error('Only superadmin can update suppliers');
+    }
+    const existing = findById(db.suppliers, id);
+    if (!existing) throw new Error('Supplier not found');
+    Object.assign(existing, updates);
+    logEvent({
+      action: 'supplier.updated' as AuditLog['action'],
+      summary: `Supplier ${existing.name} updated`,
+      actorId: creatorId,
+      actorRole: creator.role,
+      entityType: 'supplier',
+      entityId: existing.id,
+      entityName: existing.name,
+      source: 'ui',
+    });
+    persist();
+    return delay(existing);
+  },
+
+  async deleteSupplier(creatorId: string, id: string): Promise<boolean> {
+    const creator = db.users.find((u) => u.id === creatorId);
+    if (!creator || creator.role !== 'superadmin') {
+      throw new Error('Only superadmin can delete suppliers');
+    }
+    const existing = findById(db.suppliers, id);
+    db.suppliers = db.suppliers.filter((s) => s.id !== id);
+    logEvent({
+      action: 'supplier.deleted' as AuditLog['action'],
+      summary: `Supplier ${existing?.name ?? id} deleted`,
+      actorId: creatorId,
+      actorRole: creator.role,
+      entityType: 'supplier',
+      entityId: id,
+      entityName: existing?.name ?? id,
+      source: 'ui',
+    });
+    persist();
+    return delay(true);
   },
 
   async createRetailer(input: Omit<Retailer, 'id' | 'createdAt'>): Promise<Retailer> {
@@ -367,7 +473,11 @@ export const api = {
     return delay(db.accounts);
   },
 
-  async createAccount(input: Omit<Account, 'id' | 'createdAt'>): Promise<Account> {
+  async createAccount(input: Omit<Account, 'id' | 'createdAt'>, creatorId?: string): Promise<Account> {
+    const actor = creatorId ? getUserById(creatorId) : getStoredUser();
+    if (!actor || !isSuperAdmin(actor)) {
+      throw new Error('Only superadmin can create buyer companies');
+    }
     const account: Account = {
       ...input,
       id: uuid(),
@@ -385,6 +495,28 @@ export const api = {
     });
     persist();
     return delay(account);
+  },
+
+  async deleteAccount(actorId: string, id: string): Promise<boolean> {
+    const actor = db.users.find((u) => u.id === actorId);
+    if (!actor || actor.role !== 'superadmin') {
+      throw new Error('Only superadmin can delete buyer companies');
+    }
+    const existing = findById(db.accounts, id);
+    db.accounts = db.accounts.filter((a) => a.id !== id);
+    logEvent({
+      action: 'account.deleted' as AuditLog['action'],
+      summary: `Account ${existing?.name ?? id} deleted`,
+      actorId,
+      actorRole: actor.role,
+      companyId: id,
+      entityType: 'account',
+      entityId: id,
+      entityName: existing?.name ?? id,
+      source: 'ui',
+    });
+    persist();
+    return delay(true);
   },
 
   async updateAccount(id: string, updates: Partial<Account>): Promise<Account> {
@@ -417,7 +549,13 @@ export const api = {
       return delay(db.orders.filter((o) => o.accountId === viewer.companyId));
     }
     if (hasSupplierScope(viewer) || viewer.role === 'admin') {
-      return delay(db.orders.filter((o) => o.supplierId === viewer.supplierId));
+      return delay(
+        db.orders.filter(
+          (o) =>
+            o.supplierId === viewer.supplierId &&
+            !['draft', 'pending_buyer_approval', 'rejected_by_buyer'].includes(o.status),
+        ),
+      );
     }
     return delay([]);
   },
@@ -448,11 +586,26 @@ export const api = {
       }
     }
 
+  const requestedStatus = (input.status as OrderStatusId | undefined) ?? 'pending';
+    let status: OrderStatusId = 'pending';
+    let approvalStatus: Order['approvalStatus'] = input.approvalStatus ?? 'pending';
+
+    if (creator && isBuyerUser(creator)) {
+      status = 'pending_buyer_approval';
+      approvalStatus = 'pending';
+    } else if (creator && (isBuyerAdmin(creator) || isBuyerManager(creator))) {
+      status = 'sent_to_supplier';
+      approvalStatus = 'accepted';
+    } else {
+      status = requestedStatus;
+      approvalStatus = input.approvalStatus ?? 'pending';
+    }
+
     const order: Order = {
       ...input,
-      status: (input.status as OrderStatusId | undefined) ?? 'pending',
+      status,
       createdBy: input.createdBy ?? db.users[0]?.id ?? 'system',
-      approvalStatus: input.approvalStatus ?? 'pending',
+      approvalStatus,
       supplierId: input.supplierId ?? db.suppliers?.[0]?.id,
       id: uuid(),
       createdAt: new Date().toISOString(),
@@ -481,7 +634,10 @@ export const api = {
     if (!existing) {
       throw new Error('Order not found');
     }
-    const actor = getUserById(updates.createdBy) ?? getStoredUser();
+    const actor = getUserById(updates.approvedBy ?? updates.createdBy) ?? getStoredUser();
+    if (!actor) {
+      throw new Error('Authentication required to update orders');
+    }
     if (actor && hasBuyerScope(actor) && existing.accountId !== actor.companyId) {
       throw new Error('Buyers can only modify their company orders');
     }
@@ -496,6 +652,37 @@ export const api = {
         throw new Error('Scoped admin cannot modify other supplier orders');
       }
     }
+
+    const nextStatus = (updates.status as OrderStatusId | undefined) ?? existing.status;
+    const nextApprovalStatus = updates.approvalStatus ?? existing.approvalStatus;
+
+    if (updates.approvalStatus && updates.approvalStatus !== existing.approvalStatus) {
+      const canBuyerApprove =
+        (isBuyerAdmin(actor) || isBuyerManager(actor)) && actor.companyId === existing.accountId;
+      const canSuperApprove = isSuperAdmin(actor);
+      const supplierReject = hasSupplierScope(actor) && updates.approvalStatus === 'rejected';
+      if (!canBuyerApprove && !canSuperApprove && !supplierReject) {
+        throw new Error('Only buyer admins or managers can approve or reject orders');
+      }
+      // Buyer approval -> send to supplier
+      if (canBuyerApprove && updates.approvalStatus === 'accepted') {
+        existing.status = 'sent_to_supplier';
+      }
+      if (canBuyerApprove && updates.approvalStatus === 'rejected') {
+        existing.status = 'rejected_by_buyer';
+      }
+    }
+
+    if (updates.status) {
+      if (hasBuyerScope(actor) || actor.role === 'admin') {
+        throw new Error('Buyers cannot change order status');
+      }
+      assertForwardOnly(existing.status, nextStatus);
+      if (requiresBuyerManagerApproval(existing, nextStatus, nextApprovalStatus)) {
+        throw new Error('Regular buyer orders require manager/admin approval before confirmation');
+      }
+    }
+
     Object.assign(existing, updates);
     if (updates.items) {
       existing.orderValue = calculateOrderValue(updates.items);
@@ -546,7 +733,20 @@ export const api = {
     if (actor && hasSupplierScope(actor) && existing.supplierId !== actor.supplierId) {
       throw new Error('Cannot move orders outside your supplier scope');
     }
-    existing.status = statusId;
+    if (existing.status === 'pending_buyer_approval' || existing.status === 'draft' || existing.status === 'rejected_by_buyer') {
+      throw new Error('Supplier cannot act on orders that are not sent to supplier');
+    }
+    let targetStatus: OrderStatusId = statusId;
+    if (statusId === 'confirmed' || statusId === 'accepted_by_supplier') {
+      targetStatus = 'accepted_by_supplier';
+    } else if (statusId === 'shipped' || statusId === 'completed') {
+      if (existing.status !== 'accepted_by_supplier' && existing.status !== 'confirmed') {
+        throw new Error('Order must be accepted by supplier before shipment');
+      }
+      targetStatus = statusId;
+    }
+    assertForwardOnly(existing.status, targetStatus);
+    existing.status = targetStatus;
     logEvent({
       action: 'order.status_changed',
       summary: `Order ${existing.orderNumber} moved to ${statusId}`,
@@ -674,7 +874,13 @@ export const api = {
 
   async createProduct(input: Omit<Product, 'id'>): Promise<Product> {
     const creator = getStoredUser();
+    if (creator && hasBuyerScope(creator)) {
+      throw new Error('Buyers cannot create products');
+    }
     if (creator && hasSupplierScope(creator)) {
+      if (!isSupplierAdmin(creator) && !isSupplierManager(creator)) {
+        throw new Error('Only supplier admins or managers can create products');
+      }
       if (!creator.supplierId) throw new Error('Supplier scope missing');
       if (input.supplierId !== creator.supplierId) {
         throw new Error('Cannot add products for another supplier');
@@ -704,6 +910,12 @@ export const api = {
       throw new Error('Product not found');
     }
     const actor = getStoredUser();
+    if (actor && hasBuyerScope(actor)) {
+      throw new Error('Buyers cannot modify products');
+    }
+    if (actor && hasSupplierScope(actor) && !isSupplierAdmin(actor) && !isSupplierManager(actor)) {
+      throw new Error('Only supplier admins or managers can modify products');
+    }
     if (actor && hasSupplierScope(actor) && existing.supplierId !== actor.supplierId) {
       throw new Error('Cannot modify products outside your supplier');
     }
@@ -726,6 +938,16 @@ export const api = {
 
   async deleteProduct(id: string): Promise<boolean> {
     const existing = findById(db.products, id);
+    const actor = getStoredUser();
+    if (actor && hasBuyerScope(actor)) {
+      throw new Error('Buyers cannot delete products');
+    }
+    if (actor && hasSupplierScope(actor) && !isSupplierAdmin(actor) && !isSupplierManager(actor)) {
+      throw new Error('Only supplier admins or managers can delete products');
+    }
+    if (actor && hasSupplierScope(actor) && existing?.supplierId && existing.supplierId !== actor.supplierId) {
+      throw new Error('Cannot delete products outside your supplier');
+    }
     db.products = db.products.filter((p) => p.id !== id);
     logEvent({
       action: 'product.deleted',
@@ -918,5 +1140,13 @@ export const api = {
       source: 'ui',
     });
     return delay(filtered);
+  },
+
+  __reset(): void {
+    db = migrateData(seedData);
+    if (canUseStorage) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(USER_KEY);
+    }
   },
 };

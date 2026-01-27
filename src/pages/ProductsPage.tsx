@@ -45,6 +45,9 @@ import { FiPlus } from 'react-icons/fi';
 import { api } from '../api/mockApi';
 import type { Product, TierPrice } from '../types';
 import { useAuth } from '../providers/AuthProvider';
+import CountrySelect from '../components/CountrySelect';
+import { PRODUCT_CATEGORIES } from '../constants/lookups';
+import { toTitleCase } from '../utils/format';
 
 const ProductsPage = () => {
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.listProducts });
@@ -82,6 +85,7 @@ const ProductsPage = () => {
     description: '',
     active: true,
     category: '',
+    originCountry: '',
     image: '',
     images: ['', '', ''],
     stock: { stockLevel: 0, minThreshold: 10, reserved: 0, leadTimeDays: 0 },
@@ -147,7 +151,13 @@ const ProductsPage = () => {
     const tierPrices = resolveTierPrices(form.basePrice);
     try {
       const lockedSupplierId = scopedSupplierId ?? form.supplierId;
-      await createProduct.mutateAsync({ ...form, supplierId: lockedSupplierId, tierPrices });
+      await createProduct.mutateAsync({
+        ...form,
+        supplierId: lockedSupplierId,
+        category: toTitleCase(form.category),
+        originCountry: form.originCountry,
+        tierPrices,
+      });
       setForm({
         supplierId: lockedSupplierId || supplierOptions[0]?.id || '',
         name: '',
@@ -157,6 +167,7 @@ const ProductsPage = () => {
         description: '',
         active: true,
         category: '',
+        originCountry: '',
         image: '',
         images: ['', '', ''],
         stock: { stockLevel: 0, minThreshold: 10, reserved: 0, leadTimeDays: 0 },
@@ -229,7 +240,7 @@ const ProductsPage = () => {
                 <FormErrorMessage>{errors.supplierId}</FormErrorMessage>
               </FormControl>
             </HStack>
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+            <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4}>
               <FormControl isInvalid={Boolean(errors.basePrice)}>
                 <FormLabel>Base price</FormLabel>
                 <NumberInput
@@ -273,6 +284,12 @@ const ProductsPage = () => {
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
                 />
               </FormControl>
+              <CountrySelect
+                label="Origin country"
+                value={form.originCountry}
+                onChange={(c) => setForm({ ...form, originCountry: c })}
+                placeholder="Type to search country"
+              />
             </SimpleGrid>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               <FormControl>
@@ -645,6 +662,11 @@ const ProductsPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <datalist id="category-list">
+        {PRODUCT_CATEGORIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </Stack>
   );
 };
