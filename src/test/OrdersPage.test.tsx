@@ -29,8 +29,6 @@ describe('OrdersPage', () => {
       { id: 'pending', name: 'Pending', order: 1 },
       { id: 'confirmed', name: 'Confirmed', order: 2 },
     ]);
-    vi.spyOn(api, 'listRetailers').mockResolvedValue([]);
-    vi.spyOn(api, 'listAccounts').mockResolvedValue([]);
     vi.spyOn(api, 'listUsers').mockResolvedValue([
       { id: 'u-admin', name: 'Admin', email: '', role: 'admin' },
       { id: 'u-supplier', name: 'Supplier', email: '', role: 'supplier' },

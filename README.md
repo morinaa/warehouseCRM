@@ -14,6 +14,16 @@ npm install
 npm run test:run
 ```
 
+## End-to-end (Playwright, Python)
+These flows use the webapp-testing helper to start Vite and run headless Chromium.
+```
+# Superadmin flow: creates supplier, buyer, product, order; verifies Orders/Products
+npm run e2e:superadmin
+
+# Buyer flow: shows Orders page "Create order" CTA and redirects to Suppliers
+npm run e2e:buyer
+```
+
 ## Notes
 - Storage key: `wholesale-crm-mock-v12` (clean data; only superadmin is seeded).
 - Superadmin credentials: `super@signalwholesale.com / demo123`. Create all other data via the UI.

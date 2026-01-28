@@ -5,6 +5,7 @@ import {
   Flex,
   Heading,
   HStack,
+  Icon,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -25,10 +26,12 @@ import {
 } from '@chakra-ui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { api } from '../api/mockApi';
 import PipelineBoard from '../components/PipelineBoard';
 import type { OrderStatusId } from '../types';
 import { useAuth } from '../providers/AuthProvider';
+import { FiBox } from 'react-icons/fi';
 
 const OrdersPage = () => {
   const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: api.listOrders });
@@ -48,6 +51,7 @@ const OrdersPage = () => {
     user?.role === 'supplier' || user?.role === 'supplier_admin' || user?.role === 'supplier_manager';
   const isBuyerRegular = user?.role === 'buyer';
   const isBuyerApprover = user?.role === 'buyer_admin' || user?.role === 'buyer_manager';
+  const isBuyerAny = isBuyerRegular || isBuyerApprover;
 
   const confirmModal = useDisclosure();
   const viewModal = useDisclosure();
@@ -227,6 +231,17 @@ const OrdersPage = () => {
           <Badge colorScheme="brand" variant="subtle">
             Total ${totalValue.toLocaleString()}
           </Badge>
+          {isBuyerAny && (
+            <Button
+              as={RouterLink}
+              to="/suppliers"
+              colorScheme="brand"
+              size="sm"
+              leftIcon={<Icon as={FiBox} />}
+            >
+              Create order
+            </Button>
+          )}
         </HStack>
       </Flex>
 

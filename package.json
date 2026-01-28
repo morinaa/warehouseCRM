@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "e2e:superadmin": "python .codex/skills/webapp-testing/scripts/with_server.py --server \"npm run dev -- --host --port 5173\" --port 5173 -- python tests/e2e/pw_extended_superadmin.py",
+    "e2e:buyer": "python .codex/skills/webapp-testing/scripts/with_server.py --server \"npm run dev -- --host --port 5173\" --port 5173 -- python tests/e2e/pw_buyer_create_order_entry.py"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

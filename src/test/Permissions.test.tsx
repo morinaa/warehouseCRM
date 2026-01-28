@@ -82,8 +82,6 @@ describe('UI permission gating', () => {
         { id: 'accepted_by_supplier', name: 'Accepted by Supplier', order: 3 },
         { id: 'rejected_by_supplier', name: 'Rejected by Supplier', order: 4 },
       ]);
-      vi.spyOn(api, 'listRetailers').mockResolvedValue([]);
-      vi.spyOn(api, 'listAccounts').mockResolvedValue([]);
       vi.spyOn(api, 'listUsers').mockResolvedValue([
         { id: 'u-buyer', name: 'Buyer', email: '', role: 'buyer' },
         { id: 'u-supplier', name: 'Supplier', email: '', role: 'supplier', supplierId: 'sup-sparkle' },
