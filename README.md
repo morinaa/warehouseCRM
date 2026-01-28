@@ -26,4 +26,3 @@ npm run e2e:buyer
 
 ## Notes
 - Storage key: `wholesale-crm-mock-v12` (clean data; only superadmin is seeded).
-- Superadmin credentials: `super@signalwholesale.com / demo123`. Create all other data via the UI.
