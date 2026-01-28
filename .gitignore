@@ -19,6 +19,7 @@ dist-ssr/
 .env.*
 !.env.example
 *.local
+AGENTS.md
 
 # Cache / build metadata
 *.tsbuildinfo
@@ -34,6 +35,7 @@ dist-ssr/
 # Testing / coverage
 coverage/
 .nyc_output/
+tests/
 
 # Editor / OS noise
 .vscode/*
