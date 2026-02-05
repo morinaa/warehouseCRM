@@ -215,6 +215,7 @@ export const api = {
       password?: string;
       supplierId?: string;
       buyerId?: string;
+      companyId?: string; // alias for buyerId
       permissions?: User['permissions'];
     },
   ): Promise<User> {
@@ -222,6 +223,11 @@ export const api = {
     const isSuper = isSuperAdmin(creator);
     const supplierAdmin = isSupplierAdmin(creator);
     const buyerAdmin = isBuyerAdmin(creator);
+
+    // Normalize aliases before validation
+    if (!input.buyerId && input.companyId) {
+      input.buyerId = input.companyId;
+    }
 
     if (db.users.find((u) => u.email === input.email)) {
       throw new Error('Email already registered');
@@ -422,6 +428,32 @@ export const api = {
     return delay(db.buyers);
   },
 
+  async createAccount(input: Omit<Buyer, 'id' | 'createdAt'>, creatorId?: string): Promise<Buyer> {
+    const actor = creatorId ? getUserById(creatorId) : getStoredUser();
+    if (!actor || !isSuperAdmin(actor)) {
+      throw new Error('Only superadmin can create buyer companies');
+    }
+    const buyer: Buyer = {
+      ...input,
+      id: uuid(),
+      createdAt: new Date().toISOString(),
+    };
+    db.buyers.push(buyer);
+    logEvent({
+      action: 'buyer.created',
+      summary: `Buyer ${buyer.name} created`,
+      actorId: actor.id,
+      actorRole: actor.role,
+      buyerId: buyer.id,
+      entityType: 'buyer',
+      entityId: buyer.id,
+      entityName: buyer.name,
+      source: 'ui',
+    });
+    persist();
+    return delay(buyer);
+  },
+
   async createBuyer(input: Omit<Buyer, 'id' | 'createdAt'>, creatorId?: string): Promise<Buyer> {
     const actor = creatorId ? getUserById(creatorId) : getStoredUser();
     if (!actor || !isSuperAdmin(actor)) {
@@ -519,12 +551,14 @@ export const api = {
     input: Omit<Order, 'id' | 'createdAt' | 'approvalStatus' | 'createdBy'> & {
       approvalStatus?: Order['approvalStatus'];
       createdBy?: string;
+      accountId?: string; // alias for buyerId
     },
   ): Promise<Order> {
     const creator = getUserById(input.createdBy) ?? getStoredUser();
+    const buyerId = input.buyerId ?? input.accountId ?? db.buyers[0]?.id ?? 'buyer-default';
     if (creator && hasBuyerScope(creator)) {
       if (!creator.buyerId) throw new Error('Buyer must belong to a company to place orders');
-      if (input.buyerId !== creator.buyerId) {
+      if (buyerId !== creator.buyerId) {
         throw new Error('Buyers can only create orders for their own company');
       }
     }
@@ -533,7 +567,7 @@ export const api = {
     }
     if (creator && creator.role === 'admin') {
       if (!creator.buyerId && !creator.supplierId) throw new Error('Admin must be scoped to a company or supplier');
-      if (creator.buyerId && input.buyerId !== creator.buyerId) {
+      if (creator.buyerId && buyerId !== creator.buyerId) {
         throw new Error('Scoped admin can only create orders for their company');
       }
       if (creator.supplierId && input.supplierId && input.supplierId !== creator.supplierId) {
@@ -558,6 +592,7 @@ export const api = {
 
     const order: Order = {
       ...input,
+      buyerId,
       status,
       createdBy: input.createdBy ?? db.users[0]?.id ?? 'system',
       approvalStatus,
